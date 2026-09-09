@@ -130,6 +130,7 @@ const TradePage: React.FC<TradePageProps> = ({
           currentPrice: selectedMarket.price_yes,
           color: "#5eae8b",
           tokenId: selectedMarket.yes_token_id,
+          marketId: selectedMarket.marketId,
         },
         {
           ticker: `${selectedMarket.ticker}-no`,
@@ -137,6 +138,7 @@ const TradePage: React.FC<TradePageProps> = ({
           currentPrice: selectedMarket.price_no,
           color: "#ef4444",
           tokenId: selectedMarket.no_token_id,
+          marketId: selectedMarket.marketId,
         },
       ];
     }
@@ -145,6 +147,7 @@ const TradePage: React.FC<TradePageProps> = ({
       name: getSubtitle(m, group.title),
       currentPrice: m.price_yes,
       tokenId: m.yes_token_id,
+      marketId: m.marketId,
     }));
   }, [selectedMarket, group.markets, group.title]);
 

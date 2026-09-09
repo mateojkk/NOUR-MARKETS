@@ -29,7 +29,7 @@ interface MarketData {
 interface PriceChartProps {
   ticker?: string;
   currentPrice?: number;
-  markets?: { ticker: string; name: string; currentPrice: number; tokenId?: string; color?: string }[];
+  markets?: { ticker: string; name: string; currentPrice: number; tokenId?: string; marketId?: string; color?: string }[];
   volume?: number;
 }
 
@@ -42,83 +42,6 @@ const TIME_RANGES: { label: TimeRange; ms: number }[] = [
   { label: "1M", ms: 30 * 24 * 60 * 60 * 1000 },
   { label: "ALL", ms: Infinity },
 ];
-
-function hashString(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash << 5) - hash + str.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash);
-}
-
-function generateBrownianPath(
-  ticker: string,
-  targetPrice: number,
-  pointsCount: number,
-  stepMs: number,
-  now: number
-): PricePoint[] {
-  const baseTicker = ticker.replace(/-yes$|-no$/, "");
-  const seed = hashString(`${baseTicker}-${pointsCount}`);
-
-  let s = seed + 12345;
-  const prng = () => {
-    let t = (s += 0x6d2b79f5);
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-
-  const clampedTarget = Math.max(5, Math.min(95, targetPrice));
-  const vol = 0.8 + prng() * 1.2;
-  const momentum = 0.65 + prng() * 0.2;
-
-  const driftType = prng();
-  let startPrice = clampedTarget;
-  if (driftType < 0.35) {
-    startPrice = Math.max(12, Math.min(88, clampedTarget + (prng() - 0.5) * 14));
-  } else if (driftType < 0.7) {
-    startPrice = Math.max(10, Math.min(85, clampedTarget - 8 - prng() * 25));
-  } else {
-    startPrice = Math.max(15, Math.min(90, clampedTarget + 8 + prng() * 25));
-  }
-
-  const W: number[] = [0];
-  let velocity = 0;
-  for (let i = 1; i <= pointsCount; i++) {
-    const u1 = Math.max(1e-7, prng());
-    const u2 = prng();
-    const z = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
-    velocity = velocity * momentum + z * Math.sqrt(1 - momentum * momentum) * vol;
-    W.push(W[i - 1] + velocity);
-  }
-
-  const finalW = W[pointsCount];
-  const history: PricePoint[] = [];
-
-  for (let i = 0; i <= pointsCount; i++) {
-    const fraction = i / pointsCount;
-    const trend = startPrice + fraction * (clampedTarget - startPrice);
-    const fluctuation = W[i] - fraction * finalW;
-    let p = Math.round((trend + fluctuation) * 10) / 10;
-    p = Math.max(4, Math.min(96, p));
-
-    if (i === pointsCount) {
-      p = clampedTarget;
-    }
-
-    const t = now - (pointsCount - i) * stepMs;
-    history.push({
-      price_yes: p,
-      price_no: Number((100 - p).toFixed(1)),
-      volume: 1000,
-      timestamp: t,
-    });
-  }
-
-  return history;
-}
 
 const formatPrice = (value: number) => {
   if (!Number.isFinite(value)) return "0¢";
@@ -235,6 +158,7 @@ const PriceChart: React.FC<PriceChartProps> = ({
         color: m.color || OUTCOME_COLORS[i % OUTCOME_COLORS.length].stroke,
         gradientId: `gradient-${i}`,
         tokenId: m.tokenId,
+        marketId: m.marketId,
       }));
     }
     if (ticker) {
@@ -245,6 +169,7 @@ const PriceChart: React.FC<PriceChartProps> = ({
           color: "#5eae8b",
           gradientId: "gradient-0",
           tokenId: undefined as string | undefined,
+          marketId: undefined as string | undefined,
         },
         {
           ticker: `${ticker}-no`,
@@ -252,6 +177,7 @@ const PriceChart: React.FC<PriceChartProps> = ({
           color: "#ef4444",
           gradientId: "gradient-1",
           tokenId: undefined as string | undefined,
+          marketId: undefined as string | undefined,
         },
       ];
     }
@@ -288,45 +214,23 @@ const PriceChart: React.FC<PriceChartProps> = ({
       return;
     }
 
-    let interval = "1d";
-    let fidelity = 60;
-    let pointsCount = 60;
-    let stepMs = 1440000;
-
-    if (range === "1m") {
-      interval = "1h";
-      fidelity = 1;
-      pointsCount = 45;
-      stepMs = 60000;
-    } else if (range === "1D") {
-      interval = "1d";
-      fidelity = 1;
-      pointsCount = 60;
-      stepMs = 1440000;
-    } else if (range === "1W") {
-      interval = "1w";
-      fidelity = 5;
-      pointsCount = 70;
-      stepMs = 8640000;
-    } else if (range === "1M") {
-      interval = "max";
-      fidelity = 15;
-      pointsCount = 85;
-      stepMs = 28800000;
-    } else if (range === "ALL") {
-      interval = "max";
-      fidelity = 60;
-      pointsCount = 95;
-      stepMs = 86400000;
-    }
-
-    const now = Date.now();
-
+    // Fetch real candle history from the DreamDEX indexer
     const fetchSingleMarket = async (m: (typeof marketsToFetch)[0], targetPrice: number): Promise<MarketData> => {
-      const marketTokenId = m.tokenId || m.ticker;
+      const clamped = Math.max(1, Math.min(99, targetPrice));
+      // Fallback when no candles exist yet: seed with the single real live
+      // price; the real-time effect appends points as prices update.
+      const seedHistory: PricePoint[] = [
+        {
+          price_yes: clamped,
+          price_no: Number((100 - clamped).toFixed(2)),
+          volume: 0,
+          timestamp: Date.now(),
+        },
+      ];
+
       try {
         const res = await fetch(
-          `${API_BASE_URL}/api/timeseries?ticker=${encodeURIComponent(marketTokenId)}&interval=${interval}&fidelity=${fidelity}&currentPrice=${targetPrice}`
+          `${API_BASE_URL}/api/timeseries?marketId=${encodeURIComponent(m.marketId || "")}`
         );
         if (res.ok) {
           const data = await res.json();
@@ -342,9 +246,7 @@ const PriceChart: React.FC<PriceChartProps> = ({
         }
       } catch {}
 
-      // Fallback: Seeded Brownian Bridge
-      const history = generateBrownianPath(m.ticker, targetPrice, pointsCount, stepMs, now);
-      return { ...m, history, currentPrice: targetPrice };
+      return { ...m, history: seedHistory, currentPrice: targetPrice };
     };
 
     setLoading(true);
@@ -392,7 +294,7 @@ const PriceChart: React.FC<PriceChartProps> = ({
       setMarketData(results);
       setLoading(false);
     });
-  }, [marketsToFetch, range, markets, currentPrice]);
+  }, [marketsToFetch, markets, currentPrice]);
 
   // Real-time: Append live price points when markets prop updates
   useEffect(() => {
