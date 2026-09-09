@@ -732,11 +732,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Indexer slow/unreachable — no fallback to demo listings anymore
   }
 
-  // Live on-chain DreamDEX markets only — demo markets removed.
-  // Put active live markets first!
+  // Live on-chain markets only — settled markets are excluded (redeem via Portfolio)
   const combined = [
     ...onchainMarkets.filter((m) => m.active),
-    ...onchainMarkets.filter((m) => !m.active),
   ];
 
   // De-duplicate by ticker/marketId

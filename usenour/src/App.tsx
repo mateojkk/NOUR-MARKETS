@@ -77,6 +77,9 @@ function App() {
   const groupedMarkets = useMemo(() => {
     const groups: { [key: string]: MarketGroup } = {};
     markets.forEach((m) => {
+      // Live trading markets only — drop settled/locked windows from the grid
+      // (covers both fresh feed data and markets that settle mid-session).
+      if (m.closed || m.active === false) return;
       // Key by marketId or ticker to keep individual DreamDEX event contracts distinct
       const key = m.marketId || m.ticker || m.title.trim();
       if (!groups[key]) {

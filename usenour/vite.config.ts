@@ -200,7 +200,6 @@ function localApiDevPlugin() {
           // Live on-chain DreamDEX markets only — demo markets removed
           const combined = [
             ...onchainMarkets.filter((m) => m.active),
-            ...onchainMarkets.filter((m) => !m.active),
           ];
 
           const seen = new Set<string>();
