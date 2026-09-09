@@ -720,15 +720,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
   } catch {
-    // Silently fall back to baseline rolling & ecosystem contracts if indexer is slow
+    // Indexer slow/unreachable — no fallback to demo listings anymore
   }
 
-  // Combine live on-chain markets, rolling windows, and ecosystem markets
+  // Live on-chain DreamDEX markets only — demo markets removed.
   // Put active live markets first!
   const combined = [
     ...onchainMarkets.filter((m) => m.active),
-    ...rolling,
-    ...ecosystem,
     ...onchainMarkets.filter((m) => !m.active),
   ];
 
