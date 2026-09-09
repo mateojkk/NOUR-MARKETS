@@ -51,6 +51,17 @@ The application has been streamlined and strictly scoped:
   - In `usenour/src/main.tsx`, `<WagmiProvider config={wagmiConfig} reconnectOnMount={false}>` was added.
   - In `usenour/src/contexts/EvmWalletContext.tsx`, wallet sessions are only restored if the user explicitly established a session previously (tracked via `localStorage.getItem("nour_connected_wallet")`).
 
+### C2. Session Restore Hardening (fixes "refresh logs me out")
+- **Root Causes** (found by reading `@magiclabs/wagmi-connector` + `@wagmi/core` sources):
+  1. Restore was gated 100% on the `nour_connected_wallet` localStorage flag — if storage was cleared/partitioned (iframe previews, private mode), refresh logged the user out even though the Magic session was still alive.
+  2. Any single failed `connectAsync` permanently wiped the flag (`.catch(() => localStorage.removeItem(...))`) — one transient RPC/network failure = permanent logout.
+  3. If the Magic session had expired, `connectAsync` made the connector open its login modal and hang forever (never resolving).
+  4. Injected restore used `connectAsync` → `wallet_requestPermissions`, which can prompt.
+- **Resolution** (in `EvmWalletContext.tsx` restore effect):
+  - Silent probes first: `eth_accounts` for injected wallets (never prompts), `magic.user.isLoggedIn()` for Magic (no modal possible).
+  - Connect only when a live session is confirmed; Magic session probe also acts as fallback when the localStorage flag is missing.
+  - Flag is only removed when the session is genuinely gone — transient failures are retried on next load.
+
 ---
 
 ### D. Custom UI vs. Magic Widget for Email Code (OTP)

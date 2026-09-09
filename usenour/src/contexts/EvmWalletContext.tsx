@@ -122,26 +122,72 @@ export const EvmWalletProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [isConnecting, isReconnecting]);
 
-  // Only restore connection on mount IF the user previously chose to connect in this session
+  // Restore the previous session on mount — silently, without any popups.
+  // 1. Injected wallet: probe `eth_accounts` (never prompts); connect only if
+  //    the wallet is already authorized and unlocked.
+  // 2. Magic email: probe `magic.user.isLoggedIn()` directly and only then
+  //    attach the connector — this also survives a lost/cleared
+  //    `nour_connected_wallet` flag, and avoids the connector falling back to
+  //    its login modal when the Magic session has expired.
   useEffect(() => {
-    const savedWallet = localStorage.getItem("nour_connected_wallet");
-    if (!savedWallet) return;
+    let cancelled = false;
 
-    if (savedWallet === "injected") {
-      const injectedConnector = connectors.find(c => c.id === "injected");
-      if (injectedConnector) {
-        connectAsync({ connector: injectedConnector }).catch(() => {
-          localStorage.removeItem("nour_connected_wallet");
-        });
+    const findInjected = () => connectors.find(c => c.id === "injected");
+    const findMagic = () =>
+      connectors.find(c => c.id === "magic" || c.name.toLowerCase().includes("magic"));
+
+    const restoreInjected = async (): Promise<boolean> => {
+      const eth = typeof window !== "undefined" ? (window as any).ethereum : null;
+      const connector = findInjected();
+      if (!eth?.request || !connector) return false;
+      try {
+        // Silent read — never triggers a wallet popup
+        const accounts: string[] = await eth.request({ method: "eth_accounts" });
+        if (cancelled || !accounts?.length) return false;
+        await connectAsync({ connector });
+        if (!cancelled) localStorage.setItem("nour_connected_wallet", "injected");
+        return true;
+      } catch {
+        return false;
       }
-    } else if (savedWallet === "magic") {
-      const magicConnector = connectors.find(c => c.id === "magic" || c.name.toLowerCase().includes("magic"));
-      if (magicConnector) {
-        connectAsync({ connector: magicConnector }).catch(() => {
-          localStorage.removeItem("nour_connected_wallet");
-        });
+    };
+
+    const restoreMagic = async (): Promise<boolean> => {
+      if (!magic) return false;
+      const connector = findMagic();
+      if (!connector) return false;
+      try {
+        // Silent session check — if false, the connector would otherwise open
+        // its login modal and hang forever, so we bail out early instead.
+        const loggedIn = await magic.user.isLoggedIn();
+        if (cancelled || !loggedIn) {
+          if (!loggedIn) localStorage.removeItem("nour_connected_wallet");
+          return false;
+        }
+        await connectAsync({ connector });
+        if (!cancelled) localStorage.setItem("nour_connected_wallet", "magic");
+        return true;
+      } catch {
+        // Transient failures (RPC/network) keep the flag for the next reload;
+        // the flag is only removed when the session is genuinely gone (above).
+        return false;
       }
-    }
+    };
+
+    (async () => {
+      const saved = localStorage.getItem("nour_connected_wallet");
+      if (saved === "injected") {
+        if (await restoreInjected()) return;
+      } else if (saved === "magic") {
+        if (await restoreMagic()) return;
+      }
+      // Fallbacks: the flag can be missing (cleared/partitioned storage) even
+      // though a session is still alive — probe Magic, then injected.
+      if (await restoreMagic()) return;
+      await restoreInjected();
+    })();
+
+    return () => { cancelled = true; };
   }, [connectAsync, connectors]);
 
   // Shared: attach the Wagmi Magic connector after Magic auth succeeds
