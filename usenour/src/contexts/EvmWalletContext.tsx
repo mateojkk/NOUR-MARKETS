@@ -132,6 +132,18 @@ export const EvmWalletProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   useEffect(() => {
     let cancelled = false;
 
+    const log = (...args: any[]) => console.info("[nour:restore]", ...args);
+
+    // Magic talks to its login iframe via postMessage; if the iframe is blocked
+    // (Brave Shields, storage partitioning) the probe can hang forever.
+    const withTimeout = <T,>(p: Promise<T>, ms: number, label: string): Promise<T> =>
+      Promise.race([
+        p,
+        new Promise<T>((_, reject) =>
+          setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+        ),
+      ]);
+
     const findInjected = () => connectors.find(c => c.id === "injected");
     const findMagic = () =>
       connectors.find(c => c.id === "magic" || c.name.toLowerCase().includes("magic"));
@@ -139,43 +151,64 @@ export const EvmWalletProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const restoreInjected = async (): Promise<boolean> => {
       const eth = typeof window !== "undefined" ? (window as any).ethereum : null;
       const connector = findInjected();
-      if (!eth?.request || !connector) return false;
+      if (!eth?.request || !connector) {
+        log("no injected provider available");
+        return false;
+      }
       try {
         // Silent read — never triggers a wallet popup
-        const accounts: string[] = await eth.request({ method: "eth_accounts" });
+        const accounts: string[] = await withTimeout(
+          eth.request({ method: "eth_accounts" }),
+          5000,
+          "eth_accounts"
+        );
+        log("injected eth_accounts:", accounts?.length || 0);
         if (cancelled || !accounts?.length) return false;
         await connectAsync({ connector });
         if (!cancelled) localStorage.setItem("nour_connected_wallet", "injected");
+        log("restored session via browser wallet");
         return true;
-      } catch {
+      } catch (err: any) {
+        log("injected restore failed:", err?.message || err);
         return false;
       }
     };
 
     const restoreMagic = async (): Promise<boolean> => {
-      if (!magic) return false;
+      if (!magic) {
+        log("Magic SDK not initialized (missing VITE_MAGIC_PUBLISHABLE_KEY?)");
+        return false;
+      }
       const connector = findMagic();
       if (!connector) return false;
       try {
         // Silent session check — if false, the connector would otherwise open
         // its login modal and hang forever, so we bail out early instead.
-        const loggedIn = await magic.user.isLoggedIn();
+        const loggedIn = await withTimeout(magic.user.isLoggedIn(), 5000, "magic.user.isLoggedIn")
+          .catch((err) => {
+            log("Magic session probe failed/timed out — your browser is likely blocking Magic's login iframe (Brave Shields / storage partitioning). Disable Shields for this site or use another browser.", err?.message || "");
+            return false;
+          });
+        log("magic session alive?", loggedIn);
         if (cancelled || !loggedIn) {
           if (!loggedIn) localStorage.removeItem("nour_connected_wallet");
           return false;
         }
         await connectAsync({ connector });
         if (!cancelled) localStorage.setItem("nour_connected_wallet", "magic");
+        log("restored session via Magic email login");
         return true;
-      } catch {
+      } catch (err: any) {
         // Transient failures (RPC/network) keep the flag for the next reload;
         // the flag is only removed when the session is genuinely gone (above).
+        log("magic restore failed:", err?.message || err);
         return false;
       }
     };
 
     (async () => {
       const saved = localStorage.getItem("nour_connected_wallet");
+      log("saved flag:", saved ?? "(none)");
       if (saved === "injected") {
         if (await restoreInjected()) return;
       } else if (saved === "magic") {
@@ -185,6 +218,7 @@ export const EvmWalletProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       // though a session is still alive — probe Magic, then injected.
       if (await restoreMagic()) return;
       await restoreInjected();
+      log("no live session found — showing login page");
     })();
 
     return () => { cancelled = true; };
