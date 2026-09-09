@@ -212,6 +212,7 @@ export interface PlaceOrderParams {
   walletProvider: any;
   poolAddress: string;
   side: "yes" | "no"; // yes = Up, no = Down
+  action?: "buy" | "sell"; // BUY = kind 0/2, SELL = kind 1/3
   priceProb: number; // 0..1 (e.g. 0.54)
   contractsAmount: number;
   orderType?: "ioc" | "post_only" | "limit";
@@ -221,6 +222,7 @@ export async function placeDreamDexOrder({
   walletProvider,
   poolAddress,
   side,
+  action = "buy",
   priceProb,
   contractsAmount,
   orderType = "ioc",
@@ -255,16 +257,50 @@ export async function placeDreamDexOrder({
   const costEst = contractsAmount * (priceProb);
   const rawCost = parseUnits((costEst * 1.05).toFixed(6), DREAMDEX_CONTRACTS.collateralDecimals);
 
+  if (action === "sell") {
+    // SELL orders move outcome tokens (ERC6909) held by the user — the pool
+    // must be granted operator rights on the outcome-token singleton first
+    // (exactly like the SDK's ensureOperator(pool) escrow step).
+    const outcomeContract = new ethers.Contract(
+      DREAMDEX_CONTRACTS.outcomeToken6909,
+      [
+        "function isOperator(address owner, address spender) view returns (bool)",
+        "function setOperator(address spender, bool approved) returns (bool)",
+      ],
+      signer
+    );
+    try {
+      const granted: boolean = await outcomeContract.isOperator(userAddress, safePoolAddress);
+      if (!granted) {
+        const opTx = await outcomeContract.setOperator(safePoolAddress, true);
+        await opTx.wait();
+      }
+    } catch (err: any) {
+      if (err?.code === "ACTION_REJECTED" || err?.message?.includes("user rejected")) {
+        throw new Error("Transaction rejected in wallet");
+      }
+      throw new Error("Failed to authorize the pool to move your outcome tokens");
+    }
+  }
+
   const currentAllowance = await collateralContract.allowance(userAddress, safePoolAddress);
-  if (currentAllowance < rawCost) {
-    const maxApprove = ethers.MaxUint256;
-    const approveTx = await collateralContract.approve(safePoolAddress, maxApprove);
-    await approveTx.wait();
+  if (action === "buy" && currentAllowance < rawCost) {
+    try {
+      const maxApprove = ethers.MaxUint256;
+      const approveTx = await collateralContract.approve(safePoolAddress, maxApprove);
+      await approveTx.wait();
+    } catch (err: any) {
+      if (err?.code === "ACTION_REJECTED" || err?.message?.includes("user rejected")) {
+        throw new Error("Transaction rejected in wallet");
+      }
+      throw new Error("Collateral approval was not confirmed");
+    }
   }
 
   // 2. Encode parameters
-  // side: 0 = BUY_YES (Up), 2 = BUY_NO (Down)
-  const sideCode = side === "yes" ? 0 : 2;
+  // kind: 0 = BUY_YES (Up), 1 = SELL_YES, 2 = BUY_NO (Down), 3 = SELL_NO
+  const baseSide = side === "yes" ? 0 : 2;
+  const sideCode = action === "sell" ? baseSide + 1 : baseSide;
   const rawPrice = snapPrice(priceProb);
   const rawQuantity = snapQuantity(contractsAmount);
   

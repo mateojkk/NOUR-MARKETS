@@ -81,6 +81,7 @@ const TradePage: React.FC<TradePageProps> = ({
         walletProvider,
         poolAddress,
         side: orderSide,
+        action: tradeAction,
         priceProb: price / 100,
         contractsAmount: shares,
         orderType: "ioc",
