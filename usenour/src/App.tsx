@@ -1,11 +1,13 @@
 import { useState, useMemo, useEffect } from "react";
 import { Routes, Route, useNavigate, useLocation, Navigate } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 import { useEvmWallet } from "./contexts/EvmWalletContext";
 import LoginPage from "./components/LoginPage";
 import ProfilePage from "./components/ProfilePage";
 import Portfolio from "./components/Portfolio";
 import Settings from "./components/Settings";
 import TopBar from "./components/TopBar";
+import nourLogo from "./assets/logo nour .png";
 
 import BottomNav from "./components/BottomNav";
 import MarketCard from "./components/MarketCard";
@@ -23,7 +25,7 @@ import { useMarketWebSocket } from "./hooks/useMarketWebSocket";
 
 function App() {
   const { toasts, addToast, removeToast } = useToast();
-  const { connected } = useEvmWallet();
+  const { connected, restoring } = useEvmWallet();
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -160,6 +162,13 @@ function App() {
       />
     );
   }, [groupedMarkets, addToast]);
+
+  // While the previous session is being restored, show a branded splash
+  // instead of the login form — the URL is untouched, so once the session
+  // returns you land exactly where you were (portfolio/trade/etc).
+  if (restoring && !connected) {
+    return <SessionRestoringSplash />;
+  }
 
   if (!connected) {
     return <LoginPage />;
@@ -341,6 +350,41 @@ function TradePageWrapper({
       onBack={() => navigate("/")}
       onOrderComplete={onOrderComplete}
     />
+  );
+}
+
+// Full-screen branded splash shown while a previous session is being restored
+// after a refresh — keeps the user's URL/page intact until they're back in.
+function SessionRestoringSplash() {
+  return (
+    <div className="login-page">
+      <div className="login-form-side">
+        <div className="login-form-wrapper" style={{ textAlign: "center", alignItems: "center" }}>
+          <div className="login-form-top">
+            <img src={nourLogo} alt="NOUR" className="login-form-logo" />
+            <div className="login-heading">
+              <h2>Nour</h2>
+              <p style={{ color: "var(--text-secondary, #888)", fontSize: "14px", marginTop: "4px" }}>
+                Prediction markets on Somnia & DreamDEX
+              </p>
+            </div>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              color: "var(--text-muted)",
+              fontSize: 14,
+              marginTop: 8,
+            }}
+          >
+            <Loader2 size={18} className="spin" />
+            <span>restoring your session…</span>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
