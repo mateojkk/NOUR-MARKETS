@@ -84,7 +84,7 @@ function localApiDevPlugin() {
             const timeoutId = setTimeout(() => controller.abort(), 4000);
 
             const gqlQuery = `query {
-              Market(where: { marketType: { _eq: "BINARY" } }, limit: 60, order_by: { createdAtTimestamp: desc }) {
+              Market(where: { marketType: { _eq: "BINARY" } }, limit: 100, order_by: { createdAtTimestamp: desc }) {
                 id
                 marketId
                 poolAddress
@@ -114,12 +114,21 @@ function localApiDevPlugin() {
               const rawList = json?.data?.Market;
 
               if (Array.isArray(rawList) && rawList.length > 0) {
-                onchainMarkets = rawList.map((m: any, idx: number) => {
+                onchainMarkets = rawList.map((m: any) => {
                   const isLive = m.clobStatus === "Trading";
-                  const lastP = m.lastPrice ? Math.round((Number(m.lastPrice) / 1e18) * 100) : 50;
+                  // DreamDEX BINARY markets quote on a 1e6 probability grid
+                  // (testnet tUSDC) or a 1e18 grid (USDso). Normalize by grid
+                  // magnitude — the two scales differ by ~1e12.
+                  const rawLast = Number(m.lastPrice);
+                  const lastP = rawLast > 0
+                    ? Math.round((rawLast > 1e12 ? rawLast / 1e18 : rawLast / 1e6) * 100)
+                    : 50;
                   const priceYes = Math.max(1, Math.min(99, lastP));
                   const priceNo = 100 - priceYes;
-                  const vol = m.cumulativeQuoteVolume ? Number(m.cumulativeQuoteVolume) / 1e6 : 0;
+                  const rawVol = Number(m.cumulativeQuoteVolume);
+                  const vol = rawVol > 0
+                    ? (rawVol > 1e12 ? rawVol / 1e18 : rawVol / 1e6)
+                    : 0;
 
                   const secondsLeft = Math.max(0, Number(m.expiry || 0) - now);
                   const mins = Math.floor(secondsLeft / 60);
@@ -162,7 +171,7 @@ function localApiDevPlugin() {
                     yes_sub_title: "Up (Yes)",
                     price_yes: priceYes,
                     price_no: priceNo,
-                    volume: vol > 0 ? vol : (38000 + (idx * 1720) % 65000),
+                    volume: vol,
                     category: "Crypto",
                     platform: "dreamdex",
                     image: icon,

@@ -16,28 +16,8 @@ export function useMarketWebSocket(_markets: any[], setMarkets: React.Dispatch<R
 
     const isGraphqlWs = wsTarget.includes("graphql");
 
-    // Background price pulse if disconnected
-    const simulatedTickInterval = setInterval(() => {
-      if (ws && ws.readyState === WebSocket.OPEN) return;
-      setMarkets((prev) => {
-        if (!prev || prev.length === 0) return prev;
-        const targetIndex = Math.floor(Math.random() * prev.length);
-        const target = prev[targetIndex];
-        if (!target || !target.active) return prev;
-
-        const delta = Math.random() > 0.5 ? 1 : -1;
-        const newYes = Math.max(5, Math.min(95, target.price_yes + delta));
-        const newNo = 100 - newYes;
-
-        const next = [...prev];
-        next[targetIndex] = {
-          ...target,
-          price_yes: newYes,
-          price_no: newNo,
-        };
-        return next;
-      });
-    }, 4000);
+    // NOTE: no fake price/volume simulation here — live data only. When the
+    // socket is disconnected, the last fetched state is shown as-is.
 
     const connect = () => {
       if (isCleanedUp || !wsTarget) return;
@@ -98,12 +78,20 @@ export function useMarketWebSocket(_markets: any[], setMarkets: React.Dispatch<R
                   let priceYes = m.price_yes;
                   let priceNo = m.price_no;
                   if (update.lastPrice) {
-                    const p = Math.round((Number(update.lastPrice) / 1e18) * 100);
+                    // Normalize by grid magnitude (1e6 probability grid for
+                    // testnet tUSDC vs 1e18 for USDso)
+                    const raw = Number(update.lastPrice);
+                    const p = raw > 1e12
+                      ? Math.round((raw / 1e18) * 100)
+                      : Math.round((raw / 1e6) * 100);
                     priceYes = Math.max(1, Math.min(99, p));
                     priceNo = 100 - priceYes;
                   }
                   const isTrading = update.clobStatus === "Trading";
-                  const vol = update.cumulativeQuoteVolume ? Number(update.cumulativeQuoteVolume) / 1e6 : m.volume;
+                  const rawVol = Number(update.cumulativeQuoteVolume);
+                  const vol = rawVol > 0
+                    ? (rawVol > 1e12 ? rawVol / 1e18 : rawVol / 1e6)
+                    : m.volume;
 
                   if (priceYes !== m.price_yes || isTrading !== m.active || vol !== m.volume) {
                     changed = true;
@@ -144,7 +132,6 @@ export function useMarketWebSocket(_markets: any[], setMarkets: React.Dispatch<R
 
     return () => {
       isCleanedUp = true;
-      clearInterval(simulatedTickInterval);
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
       if (ws) ws.close();
     };
