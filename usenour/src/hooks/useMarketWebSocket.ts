@@ -52,7 +52,7 @@ export function useMarketWebSocket(_markets: any[], setMarkets: React.Dispatch<R
                   type: "start",
                   payload: {
                     query:
-                      'subscription { Market(where: { marketType: { _eq: "BINARY" } }, limit: 100, order_by: { createdAtTimestamp: desc }) { id marketId clobStatus lastPrice cumulativeQuoteVolume } }',
+                      'subscription { Market(where: { marketType: { _eq: "BINARY" }, clobStatus: { _eq: "Trading" } }, limit: 200, order_by: { expiry: asc }) { id marketId clobStatus lastPrice cumulativeQuoteVolume } }',
                   },
                 })
               );

@@ -619,7 +619,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const timeoutId = setTimeout(() => controller.abort(), 4000);
 
     const gqlQuery = `query {
-      Market(where: { marketType: { _eq: "BINARY" } }, limit: 100, order_by: { createdAtTimestamp: desc }) {
+      Market(where: { marketType: { _eq: "BINARY" }, clobStatus: { _eq: "Trading" } }, limit: 500, order_by: { expiry: asc }) {
         id
         marketId
         poolAddress
