@@ -240,7 +240,9 @@ export async function placeDreamDexOrder({
       "This market's trading pool is not live on-chain (demo listing). Please trade a market marked 🟢 LIVE."
     );
   }
-  // 1. Approve Collateral to BinaryMarketsModule if needed
+  // 1. Approve Collateral to the POOL if needed.
+  // Per the DreamDEX SDK, order escrow pulls collateral msg.sender -> pool,
+  // so the approval must target the pool (approving the module does nothing here).
   const collateralContract = new ethers.Contract(
     DREAMDEX_CONTRACTS.collateral,
     [
@@ -253,10 +255,10 @@ export async function placeDreamDexOrder({
   const costEst = contractsAmount * (priceProb);
   const rawCost = parseUnits((costEst * 1.05).toFixed(6), DREAMDEX_CONTRACTS.collateralDecimals);
 
-  const currentAllowance = await collateralContract.allowance(userAddress, DREAMDEX_CONTRACTS.binaryMarketsModule);
+  const currentAllowance = await collateralContract.allowance(userAddress, safePoolAddress);
   if (currentAllowance < rawCost) {
     const maxApprove = ethers.MaxUint256;
-    const approveTx = await collateralContract.approve(DREAMDEX_CONTRACTS.binaryMarketsModule, maxApprove);
+    const approveTx = await collateralContract.approve(safePoolAddress, maxApprove);
     await approveTx.wait();
   }
 
@@ -265,7 +267,6 @@ export async function placeDreamDexOrder({
   const sideCode = side === "yes" ? 0 : 2;
   const rawPrice = snapPrice(priceProb);
   const rawQuantity = snapQuantity(contractsAmount);
-  const expireNs = getExpiryNanoseconds(300); // 5 min expiry
   
   // orderType: 2 = IOC (taker, must cross), 3 = PostOnly (maker), 0 = LIMIT
   const typeCode = orderType === "ioc" ? 2 : orderType === "post_only" ? 3 : 0;
@@ -274,17 +275,32 @@ export async function placeDreamDexOrder({
   const poolContract = new ethers.Contract(
     safePoolAddress,
     [
-      "function placeBinaryOrder(uint8 side, uint256 price, uint256 quantity, uint64 expireNs, uint8 orderType) external returns (uint256)",
+      // Matches the DreamDEX binary pool ABI exactly (markets-sdk 0.29.0).
+      // A shorter/older 5-arg encoding hits an unknown selector and reverts.
+      "function placeBinaryOrder(uint8 kind, uint256 price, uint256 quantity, uint64 expireTimestampNs, uint8 orderType, uint8 selfMatchingOption, address builder, uint96 builderFeeBpsTimes1k, uint64 userData) payable returns (bool success, uint128 id)",
+      "function marketExpiryNs() view returns (uint64)",
     ],
     signer
   );
 
+  // v2 order-expiry rule (per the SDK): every order must satisfy
+  // 0 < expireNs <= pool.marketExpiryNs — a fixed "now + 5 min" reverts with
+  // OrderExpiryBeyondMarket on windows with less time left. Default to the
+  // pool's own market expiry, exactly like the SDK does.
+  let expireNs: bigint;
   try {
-    const tx = await poolContract.placeBinaryOrder(sideCode, rawPrice, rawQuantity, expireNs, typeCode);
+    const poolExpiryNs: bigint = await poolContract.marketExpiryNs();
+    expireNs = poolExpiryNs;
+  } catch {
+    expireNs = getExpiryNanoseconds(900); // 15 min safety cap fallback
+  }
+
+  try {
+    const tx = await poolContract.placeBinaryOrder(sideCode, rawPrice, rawQuantity, expireNs, typeCode, 0, ethers.ZeroAddress, 0, 0);
     const receipt = await tx.wait();
     return {
       txHash: receipt.hash,
-      orderId: `order-${Date.now()}`,
+      orderId: `order-${receipt.hash}`,
     };
   } catch (err: any) {
     // Surface the real on-chain reason — never fake success. The dashboard and
