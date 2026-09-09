@@ -112,7 +112,7 @@ export default function WalletActions({ walletAddress, usdcBalance, onTransactio
 
   return (
     <>
-      <div className="wallet-actions-bar">
+      <div className="wallet-actions">
         <button
           className="wallet-action-btn deposit"
           onClick={() => setActiveModal("deposit")}

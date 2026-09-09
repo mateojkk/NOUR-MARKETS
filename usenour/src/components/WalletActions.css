@@ -11,6 +11,8 @@
 
 .wallet-action-btn {
   flex: 1;
+  min-width: 0;
+  white-space: nowrap;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -331,6 +333,9 @@
 
 /* Mobile */
 @media (max-width: 480px) {
+  .wallet-actions {
+    flex-direction: column;
+  }
   .wallet-modal {
     max-width: 100%;
     border-radius: 16px;
