@@ -10,8 +10,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@magic-ext/oauth": "^24.0.0",
-    "@magic-ext/webauthn": "^27.3.1",
     "@magiclabs/wagmi-connector": "^2.3.2",
     "@somnia-chain/markets-sdk": "^0.29.0",
     "@tailwindcss/vite": "^4.1.17",

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useAccount, useDisconnect, useConnect } from "wagmi";
 import { Magic } from "magic-sdk";
 import { clearAuthToken, getAuthToken, setAuthToken } from "../services/auth";
@@ -22,7 +22,11 @@ interface EvmWalletContextType {
   authenticated: boolean;
   collateralBalance: number;
   walletProvider: any;
-  connect: (email: string) => Promise<void>;
+  emailOtpSent: boolean;
+  emailOtpError: string;
+  startEmailLogin: (email: string) => Promise<void>;
+  verifyEmailOtp: (code: string) => Promise<void>;
+  cancelEmailLogin: () => void;
   connectInjected: () => Promise<void>;
   claimFaucet: () => Promise<string>;
   refreshBalance: () => Promise<void>;
@@ -47,6 +51,13 @@ export const EvmWalletProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [collateralBalance, setCollateralBalance] = useState<number>(0);
   const [isStuck, setIsStuck] = useState(false);
   const [walletProvider, setWalletProvider] = useState<any>(null);
+
+  // Headless email OTP login state
+  const otpHandleRef = useRef<any>(null);
+  const otpResolveRef = useRef<(() => void) | null>(null);
+  const otpRejectRef = useRef<((err: Error) => void) | null>(null);
+  const [emailOtpSent, setEmailOtpSent] = useState(false);
+  const [emailOtpError, setEmailOtpError] = useState("");
 
   // Dynamically resolve active wallet provider (MetaMask / Injected / Magic)
   useEffect(() => {
@@ -133,20 +144,109 @@ export const EvmWalletProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [connectAsync, connectors]);
 
-  const connect = useCallback(async (email: string) => {
-    if (!magic) throw new Error("Magic not initialized");
-    setInternalConnecting(true);
-    try {
-      await magic.auth.loginWithMagicLink({ email });
-      const connector = connectors.find(c => c.id === 'magic' || c.name.toLowerCase().includes('magic'));
-      if (connector) {
-        await connectAsync({ connector });
-        localStorage.setItem("nour_connected_wallet", "magic");
-      }
-    } finally {
-      setInternalConnecting(false);
+  // Shared: attach the Wagmi Magic connector after Magic auth succeeds
+  const connectWithMagicConnector = useCallback(async () => {
+    const connector = connectors.find(c => c.id === 'magic' || c.name.toLowerCase().includes('magic'));
+    if (connector) {
+      await connectAsync({ connector });
+      localStorage.setItem("nour_connected_wallet", "magic");
     }
-  }, [connectAsync, connectors]);
+  }, [connectAsync]);
+
+  // Headless email login: sends a 6-digit code WITHOUT Magic's prebuilt UI.
+  // Resolves once the code has been delivered (or immediately if the login
+  // completes without an OTP challenge, e.g. a remembered device).
+  const startEmailLogin = useCallback((email: string) => {
+    return new Promise<void>((resolve, reject) => {
+      if (!magic) { reject(new Error("Magic not initialized")); return; }
+      setEmailOtpError("");
+      setEmailOtpSent(false);
+
+      const handle: any = magic.auth.loginWithEmailOTP({ email, showUI: false });
+      otpHandleRef.current = handle;
+      let startSettled = false;
+
+      handle.on("email-otp-sent", () => {
+        if (!startSettled) {
+          startSettled = true;
+          setEmailOtpSent(true);
+          resolve();
+        }
+      });
+
+      const fail = (message: string, fatal: boolean) => {
+        setEmailOtpError(message);
+        if (fatal) {
+          otpHandleRef.current = null;
+          setEmailOtpSent(false);
+          const err = new Error(message);
+          otpRejectRef.current?.(err);
+          otpResolveRef.current = null;
+          otpRejectRef.current = null;
+          if (!startSettled) { startSettled = true; reject(err); }
+        } else {
+          // Invalid code: reject the pending verify attempt so the UI
+          // re-enables input; the same handle stays valid for a retry.
+          const err = new Error(message);
+          otpRejectRef.current?.(err);
+          otpResolveRef.current = null;
+          otpRejectRef.current = null;
+        }
+      };
+
+      handle.on("invalid-email-otp", () => fail("Invalid code. Please try again.", false));
+      handle.on("expired-email-otp", () => fail("Your code expired. Please request a new one.", true));
+      handle.on("max-email-otp-attempts-exceeded", () => fail("Too many attempts. Please request a new code.", true));
+
+      handle.then(async () => {
+        otpHandleRef.current = null;
+        try {
+          await connectWithMagicConnector();
+          setEmailOtpSent(false);
+          otpResolveRef.current?.();
+        } catch (err: any) {
+          setEmailOtpSent(false);
+          otpRejectRef.current?.(new Error(err?.message || "Signed in, but failed to start wallet session."));
+        } finally {
+          otpResolveRef.current = null;
+          otpRejectRef.current = null;
+          if (!startSettled) { startSettled = true; resolve(); }
+        }
+      }).catch((err: any) => {
+        otpHandleRef.current = null;
+        setEmailOtpSent(false);
+        const e = new Error(err?.message || "Email login failed");
+        otpRejectRef.current?.(e);
+        otpResolveRef.current = null;
+        otpRejectRef.current = null;
+        if (!startSettled) { startSettled = true; reject(e); }
+      });
+    });
+  }, [connectWithMagicConnector]);
+
+  // Verifies the user-entered 6-digit code against the pending login handle.
+  const verifyEmailOtp = useCallback((code: string) => {
+    return new Promise<void>((resolve, reject) => {
+      const handle = otpHandleRef.current;
+      if (!handle) {
+        reject(new Error("No login in progress. Please request a new code."));
+        return;
+      }
+      setEmailOtpError("");
+      otpResolveRef.current = resolve;
+      otpRejectRef.current = reject;
+      handle.emit("verify-email-otp", code.trim());
+    });
+  }, []);
+
+  // Aborts an in-flight email login (Back button) and cleans all state.
+  const cancelEmailLogin = useCallback(() => {
+    otpHandleRef.current = null;
+    otpResolveRef.current = null;
+    otpRejectRef.current = null;
+    setEmailOtpSent(false);
+    setEmailOtpError("");
+  }, []);
 
   const connectInjected = useCallback(async () => {
     setInternalConnecting(true);
@@ -205,13 +305,17 @@ export const EvmWalletProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       authenticated: isAuthenticated,
       collateralBalance,
       walletProvider,
-      connect,
+      emailOtpSent,
+      emailOtpError,
+      startEmailLogin,
+      verifyEmailOtp,
+      cancelEmailLogin,
       connectInjected,
       claimFaucet,
       refreshBalance,
       disconnect,
     }),
-    [address, isConnected, isConnecting, isReconnecting, isStuck, internalConnecting, isAuthenticated, collateralBalance, walletProvider, connect, connectInjected, claimFaucet, refreshBalance, disconnect]
+    [address, isConnected, isConnecting, isReconnecting, isStuck, internalConnecting, isAuthenticated, collateralBalance, walletProvider, emailOtpSent, emailOtpError, startEmailLogin, verifyEmailOtp, cancelEmailLogin, connectInjected, claimFaucet, refreshBalance, disconnect]
   );
 
   return <EvmWalletContext.Provider value={value}>{children}</EvmWalletContext.Provider>;

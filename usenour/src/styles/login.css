@@ -316,6 +316,66 @@
   margin: 0;
 }
 
+/* === OTP CODE FORM === */
+.login-otp-row {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.login-otp-box {
+  flex: 1;
+  min-width: 0;
+  height: 56px;
+  text-align: center;
+  font-family: var(--font-sans);
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  padding: 0;
+}
+
+.login-otp-box:focus {
+  border-color: var(--primary);
+}
+
+.login-otp-box:disabled {
+  opacity: 0.6;
+}
+
+.login-otp-box-error {
+  border-color: var(--danger);
+}
+
+.login-resend-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+  padding: 4px 0;
+  text-transform: lowercase;
+  transition: color 0.15s;
+  align-self: center;
+}
+
+.login-resend-btn:hover:not(:disabled) {
+  color: var(--primary);
+}
+
+.login-resend-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* === MOBILE === */
 @media (max-width: 768px) {
   .login-page {

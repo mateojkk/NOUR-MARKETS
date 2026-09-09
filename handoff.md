@@ -169,5 +169,6 @@ npm run build --prefix usenour
 - [x] Resolved "No Login Methods Configured" Magic issue.
 - [x] Resolved unexpected MetaMask popup on initial page load.
 - [x] 0 build errors, 0 lint errors.
-- [ ] *(Optional UI Polish)*: Swap `magic.auth.loginWithMagicLink` to `magic.auth.loginWithEmailOTP({ showUI: false })` if custom in-app 6-digit code entry is desired.
-- [ ] Ensure testnet faucet has sufficient test STT for gas and tUSDC for liquidity on target testnet markets.
+- [x] Custom in-app 6-digit code entry implemented: headless `magic.auth.loginWithEmailOTP({ showUI: false })` in `EvmWalletContext.tsx` (`startEmailLogin` / `verifyEmailOtp` / `cancelEmailLogin`), custom OTP screen in `LoginPage.tsx` (6 boxes, paste support, auto-submit, resend, error states), styles in `login.css` (`.login-otp-*`, `.login-resend-btn`). No Magic popup widget.
+- [x] Faucet flow hardened & verified: `claimTestnetFaucet` auto-switches/adds Somnia Shannon (50312), checks STT gas balance with faucet guidance, caps claim at 10,000 tUSDC, and maps wallet rejections / insufficient gas to friendly errors.
+- [ ] Ensure testnet faucet has sufficient test STT for gas and tUSDC for liquidity on target testnet markets. *(ops task — needs a funded wallet; frontend flow is ready)*
