@@ -93,6 +93,77 @@ export async function updateProfile(
 // Trades API
 // =============================================================================
 
+// Local fallback: in local dev there is no backend behind /api/user/*, so
+// trades are mirrored into localStorage to keep the dashboard functional.
+const LOCAL_TRADES_PREFIX = "nour-local-trades-";
+const LOCAL_TRADES_CAP = 200;
+
+function localTradesKey(walletAddress: string): string {
+  return `${LOCAL_TRADES_PREFIX}${walletAddress.toLowerCase()}`;
+}
+
+function readLocalTrades(walletAddress: string): TradeRecordResponse[] {
+  try {
+    const raw = localStorage.getItem(localTradesKey(walletAddress));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalTrade(walletAddress: string, trade: TradeRecord): TradeRecordResponse {
+  const record: TradeRecordResponse = {
+    ...trade,
+    id: Date.now(),
+    created_at: new Date().toISOString(),
+  };
+  const list = readLocalTrades(walletAddress);
+  list.unshift(record);
+  try {
+    localStorage.setItem(localTradesKey(walletAddress), JSON.stringify(list.slice(0, LOCAL_TRADES_CAP)));
+  } catch {}
+  return record;
+}
+
+// Derive open positions from the local trade history (buy adds contracts at
+// cost, sell reduces the position and books realized P&L).
+function derivePositionsFromTrades(trades: TradeRecordResponse[]): PositionRecord[] {
+  const acc = new Map<string, {
+    ticker: string; title: string; side: "yes" | "no";
+    contracts: number; cost: number; realized: number;
+  }>();
+  for (const t of trades) {
+    const key = `${t.ticker}:${t.side}`;
+    const entry = acc.get(key) ?? {
+      ticker: t.ticker, title: t.title, side: t.side,
+      contracts: 0, cost: 0, realized: 0,
+    };
+    if (t.action === "buy") {
+      entry.contracts += t.amount;
+      entry.cost += t.price * t.amount;
+    } else {
+      const avg = entry.contracts > 0 ? entry.cost / entry.contracts : t.price;
+      const closed = Math.min(t.amount, entry.contracts);
+      entry.realized += (t.price - avg) * closed;
+      entry.contracts = Math.max(0, entry.contracts - t.amount);
+      entry.cost = entry.contracts > 0 ? avg * entry.contracts : 0;
+    }
+    acc.set(key, entry);
+  }
+  return [...acc.values()]
+    .filter((p) => p.contracts > 0.0001 || Math.abs(p.realized) > 0.0001)
+    .map((p) => ({
+      ticker: p.ticker,
+      title: p.title,
+      side: p.side,
+      contracts: p.contracts,
+      avg_price: p.contracts > 0 ? p.cost / p.contracts : 0,
+      realized_pnl: p.realized,
+    }));
+}
+
 export async function getTrades(
   walletAddress: string,
   limit = 100
@@ -101,12 +172,14 @@ export async function getTrades(
     const response = await authFetch(
       `${BACKEND_URL}/api/user/${walletAddress}/trades?limit=${limit}`
     );
-    if (!response.ok) return [];
-    return await response.json();
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data) && data.length > 0) return data;
+    }
   } catch (error) {
-    logger.error("Failed to fetch trades", error);
-    return [];
+    logger.warn("Backend trades unavailable, using local trade history", error);
   }
+  return readLocalTrades(walletAddress);
 }
 
 export async function recordTrade(
@@ -119,10 +192,14 @@ export async function recordTrade(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(trade),
     });
-    if (!response.ok) return null;
-    return await response.json();
+    if (response.ok) return await response.json();
   } catch (error) {
-    logger.error("Failed to record trade", error);
+    logger.warn("Backend trade recording unavailable, saving locally", error);
+  }
+  // Fallback: persist locally so the dashboard keeps working without a backend
+  try {
+    return saveLocalTrade(walletAddress, trade);
+  } catch {
     return null;
   }
 }
@@ -134,22 +211,35 @@ export async function recordTrade(
 export async function getStats(walletAddress: string): Promise<UserStats | null> {
   try {
     const response = await authFetch(`${BACKEND_URL}/api/user/${walletAddress}/stats`);
-    if (!response.ok) return null;
-    const data = await response.json();
-    if (!data || typeof data !== "object") return null;
-    return {
-      total_trades: data.total_trades || 0,
-      total_volume: data.total_volume || 0,
-      total_pnl: data.total_pnl || 0,
-      win_rate: data.win_rate || 0,
-      win_count: data.win_count || 0,
-      loss_count: data.loss_count || 0,
-      rank: data.rank || { rank: "R", title: "Rookie", score: 0, progress: 0 }
-    };
+    if (response.ok) {
+      const data = await response.json();
+      if (data && typeof data === "object") {
+        return {
+          total_trades: data.total_trades || 0,
+          total_volume: data.total_volume || 0,
+          total_pnl: data.total_pnl || 0,
+          win_rate: data.win_rate || 0,
+          win_count: data.win_count || 0,
+          loss_count: data.loss_count || 0,
+          rank: data.rank || { rank: "R", title: "Rookie", score: 0, progress: 0 }
+        };
+      }
+    }
   } catch (error) {
-    logger.error("Failed to fetch stats", error);
-    return null;
+    logger.warn("Backend stats unavailable, deriving from local trades", error);
   }
+  // Fallback: derive basic stats from the local trade history
+  const trades = readLocalTrades(walletAddress);
+  if (trades.length === 0) return null;
+  return {
+    total_trades: trades.length,
+    total_volume: trades.reduce((sum, t) => sum + (t.total_cost || 0), 0),
+    total_pnl: 0,
+    win_rate: 0,
+    win_count: 0,
+    loss_count: 0,
+    rank: { rank: "R", title: "Rookie", score: 0, progress: 0 },
+  };
 }
 
 // =============================================================================
@@ -168,15 +258,20 @@ export interface PositionRecord {
 export async function getPositions(walletAddress: string): Promise<PositionRecord[]> {
   try {
     const response = await authFetch(`${BACKEND_URL}/api/user/${walletAddress}/positions`);
-    if (!response.ok) return [];
-    const data = await response.json();
-    if (Array.isArray(data)) return data;
-    if (Array.isArray(data?.positions)) return data.positions;
-    return [];
+    if (response.ok) {
+      const data = await response.json();
+      const list = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.positions)
+          ? data.positions
+          : [];
+      if (list.length > 0) return list;
+    }
   } catch (error) {
-    logger.error("Failed to fetch positions", error);
-    return [];
+    logger.warn("Backend positions unavailable, deriving from local trades", error);
   }
+  // Fallback: derive positions from the local trade history
+  return derivePositionsFromTrades(readLocalTrades(walletAddress));
 }
 
 export default {

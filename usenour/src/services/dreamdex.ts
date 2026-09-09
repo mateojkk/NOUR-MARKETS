@@ -763,6 +763,15 @@ export async function placeDreamDexOrder({
   const signer = await provider.getSigner();
   const userAddress = await signer.getAddress();
 
+  // Pre-flight: ensure the market's pool contract actually exists on-chain.
+  // Demo/synthetic listings have fabricated pool addresses — sending an order
+  // to them would revert and burn gas. Direct users to 🟢 LIVE markets.
+  const poolCode = await somniaClient.getCode({ address: safePoolAddress as Address });
+  if (!poolCode || poolCode === "0x") {
+    throw new Error(
+      "This market's trading pool is not live on-chain (demo listing). Please trade a market marked 🟢 LIVE."
+    );
+  }
   // 1. Approve Collateral to BinaryMarketsModule if needed
   const collateralContract = new ethers.Contract(
     DREAMDEX_CONTRACTS.collateral,
@@ -810,15 +819,12 @@ export async function placeDreamDexOrder({
       orderId: `order-${Date.now()}`,
     };
   } catch (err: any) {
-    // If testing on sandbox without live pool deployed at address, return simulated success hash
-    if (String(err).includes("call revert exception") || String(err).includes("code=BAD_DATA")) {
-      console.warn("Direct pool contract invocation simulated:", err.message);
-      return {
-        txHash: `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("")}`,
-        orderId: `order-${Date.now()}`,
-      };
+    // Surface the real on-chain reason — never fake success. The dashboard and
+    // explorer must reflect only transactions that actually landed.
+    if (err?.code === "ACTION_REJECTED" || err?.message?.includes("user rejected")) {
+      throw new Error("Transaction rejected in wallet");
     }
-    throw err;
+    throw new Error(err?.reason || err?.shortMessage || err?.message || "Order failed on Somnia Shannon");
   }
 }
 
