@@ -1,0 +1,183 @@
+/*
+ * Profile Page & Rank Badge
+ * Uses app design tokens
+ */
+
+/* === RANK BADGE === */
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 10px;
+  background: var(--bg-alt);
+  border: none;
+}
+
+.rank-letter {
+  font-weight: 700;
+  color: var(--rank-color);
+  font-size: 14px;
+}
+
+.rank-title {
+  font-weight: 500;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.rank-score {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* Badge sizes */
+.rank-badge-sm {
+  padding: 3px 10px;
+  gap: 6px;
+  border-radius: 8px;
+}
+
+.rank-badge-sm .rank-letter { font-size: 12px; font-weight: 700; }
+.rank-badge-sm .rank-title { font-size: 11px; font-weight: 500; }
+.rank-badge-sm .rank-score { display: inline-block; font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
+
+.rank-badge-lg {
+  padding: 10px 20px;
+  gap: 10px;
+  border-radius: 14px;
+}
+
+.rank-badge-lg .rank-letter { font-size: 20px; }
+.rank-badge-lg .rank-title { font-size: 16px; }
+.rank-badge-lg .rank-score { font-size: 13px; }
+
+/* === PROFILE PAGE === */
+.profile-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+  padding: 20px;
+}
+
+.profile-card {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 32px 24px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+}
+
+.profile-back-btn {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 0;
+  transition: color 0.15s;
+}
+
+.profile-back-btn:hover {
+  color: var(--text);
+}
+
+/* Avatar */
+.profile-avatar-section {
+  margin-top: 8px;
+}
+
+.profile-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--border);
+}
+
+.profile-avatar-placeholder {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: var(--bg-alt);
+  border: 3px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+}
+
+/* Name */
+.profile-name {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+  letter-spacing: -0.3px;
+}
+
+.profile-username {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: -8px 0 0;
+  font-weight: 400;
+}
+
+/* Bio */
+.profile-bio {
+  font-size: 14px;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.5;
+  margin: 0;
+  font-weight: 300;
+  max-width: 300px;
+}
+
+/* Stats row */
+.profile-stats {
+  display: flex;
+  gap: 32px;
+  margin-top: 8px;
+}
+
+.profile-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.profile-stat-value {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.profile-stat-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* Loading/error states */
+.profile-loading,
+.profile-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-muted);
+  font-size: 14px;
+}

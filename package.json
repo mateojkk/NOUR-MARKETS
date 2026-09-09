@@ -1,0 +1,18 @@
+{
+  "name": "nour-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Nour - Next-gen Prediction Markets on Somnia and DreamDEX",
+  "workspaces": [
+    "usenour"
+  ],
+  "scripts": {
+    "dev": "npm run dev --prefix usenour",
+    "build": "npm run build --prefix usenour",
+    "lint": "npm run lint --prefix usenour"
+  },
+  "dependencies": {
+    "@somnia-chain/markets-sdk": "^0.29.0",
+    "viem": "^2.56.3"
+  }
+}

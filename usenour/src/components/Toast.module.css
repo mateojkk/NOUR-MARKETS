@@ -1,0 +1,55 @@
+.toastContainer {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none; /* Let clicks pass through if not on a toast */
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  min-height: 36px;
+  min-width: 140px;
+  border-radius: 40px;
+  background: #000; /* Pure black dynamic island feel */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  color: #fff;
+  white-space: nowrap;
+}
+
+.toastMessage {
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: lowercase; /* as requested */
+  letter-spacing: -0.2px;
+  opacity: 0.9;
+}
+
+/* Optional: subtle border for error to distinguish without being harsh */
+.toastError {
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.toastSuccess {
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+@media (max-width: 480px) {
+  .toastContainer {
+    top: 12px;
+    width: 90%;
+  }
+  
+  .toast {
+    max-width: 100%;
+  }
+}

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="dreamGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#EC4899"/>
+      <stop offset="50%" stop-color="#8B5CF6"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="#0D0E15"/>
+  <circle cx="32" cy="32" r="26" fill="url(#dreamGrad)" opacity="0.15"/>
+  <path d="M32 12 L37 26 L52 26 L40 36 L44 50 L32 41 L20 50 L24 36 L12 26 L27 26 Z" fill="url(#dreamGrad)"/>
+</svg>

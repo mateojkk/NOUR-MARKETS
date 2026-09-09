@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#160826"/>
+      <stop offset="50%" stop-color="#0E0519"/>
+      <stop offset="100%" stop-color="#06020A"/>
+    </linearGradient>
+
+    <!-- Vice City Sunset Gradient -->
+    <linearGradient id="vi-sunset" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FF2A8D"/>
+      <stop offset="30%" stop-color="#FF5C38"/>
+      <stop offset="65%" stop-color="#A224B8"/>
+      <stop offset="100%" stop-color="#41095E"/>
+    </linearGradient>
+
+    <!-- Inner Glow/Highlight -->
+    <linearGradient id="vi-highlight" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.35"/>
+      <stop offset="50%" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.3"/>
+    </linearGradient>
+
+    <!-- Clip path matching the VI shape -->
+    <clipPath id="vi-shape">
+      <!-- V path -->
+      <polygon points="12,13 20,13 25,37 30,13 38,13 25,51"/>
+      <!-- I path -->
+      <rect x="44" y="13" width="8" height="38" rx="1"/>
+    </clipPath>
+  </defs>
+
+  <!-- Container Box -->
+  <rect width="64" height="64" rx="16" fill="url(#bg-grad)"/>
+  <rect width="64" height="64" rx="16" stroke="rgba(255, 42, 141, 0.35)" stroke-width="1.2" fill="none"/>
+
+  <!-- Glowing Aura behind VI -->
+  <circle cx="32" cy="32" r="22" fill="#FF2A8D" opacity="0.12"/>
+
+  <!-- VI Base with Sunset Gradient -->
+  <g clip-path="url(#vi-shape)">
+    <!-- Sunset Sky -->
+    <rect x="10" y="10" width="44" height="44" fill="url(#vi-sunset)"/>
+
+    <!-- Tropical Palm Tree Silhouettes inside VI -->
+    <path d="M22 51 Q 25 36 29 27 Q 31 24 33 22" stroke="#150426" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <!-- Left Fronds -->
+    <path d="M30 25 Q 24 22 17 26" stroke="#150426" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+    <path d="M30 24 Q 23 18 19 20" stroke="#150426" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+    <path d="M31 23 Q 26 15 24 16" stroke="#150426" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+    <!-- Right Fronds -->
+    <path d="M32 23 Q 38 16 43 19" stroke="#150426" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+    <path d="M32 24 Q 40 21 47 24" stroke="#150426" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+    <path d="M31 26 Q 37 28 44 32" stroke="#150426" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+
+    <!-- Specular highlight overlay -->
+    <rect x="10" y="10" width="44" height="44" fill="url(#vi-highlight)"/>
+  </g>
+
+  <!-- VI Outer Stroke Outline -->
+  <polygon points="12,13 20,13 25,37 30,13 38,13 25,51" fill="none" stroke="#FFFFFF" stroke-width="1" stroke-linejoin="round" opacity="0.85"/>
+  <rect x="44" y="13" width="8" height="38" rx="1" fill="none" stroke="#FFFFFF" stroke-width="1" stroke-linejoin="round" opacity="0.85"/>
+
+  <!-- Centered "GTA" pill badge -->
+  <g transform="translate(0, 1)">
+    <!-- Badge shadow / border -->
+    <rect x="15" y="27" width="34" height="12" rx="3.5" fill="#0E0519" stroke="rgba(255, 255, 255, 0.4)" stroke-width="0.8"/>
+    <!-- Text GTA -->
+    <text x="32" y="36.5" font-family="'Arial Black', 'Impact', 'Segoe UI Black', sans-serif" font-weight="900" font-size="8.5" fill="#FFFFFF" text-anchor="middle" letter-spacing="1.2">GTA</text>
+  </g>
+</svg>

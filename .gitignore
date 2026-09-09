@@ -1,0 +1,31 @@
+# node
+node_modules/
+dist/
+.env
+.run.bat
+.pip.bat
+redis.md
+
+# rust
+target/
+**/*.rs.bk
+
+# Documentation (private)
+DEVELOPER_GUIDE.md
+DEPLOYMENT_CHECKLIST.md
+rules.md
+
+# Tests (private)
+server/tests/test_trading.py
+server/tests/test_portfolio.py
+
+# Databases & Caches
+*.db
+*.sqlite
+__pycache__/
+.pytest_cache/
+.DS_Store
+.vscode/
+.idea/
+*.log
+.codex

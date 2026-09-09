@@ -1,0 +1,453 @@
+/* 
+ * Trade & Options Styles
+ */
+
+.market-options {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.market-option {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.market-option:hover {
+  border-color: var(--text-muted);
+}
+
+.market-option.active {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
+}
+
+.trade-panel {
+  background: var(--bg-alt);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid var(--border);
+}
+
+.side-selector {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.side-btn {
+  flex: 1;
+  padding: 16px;
+  border-radius: 12px;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  background: var(--bg);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+
+.side-btn.yes {
+  color: var(--yes-color);
+  background: var(--yes-bg);
+  border: none;
+}
+
+.side-btn.yes:hover,
+.side-btn.yes.active {
+  background: var(--primary);
+  color: var(--text-inverse);
+  border: none;
+}
+
+.side-btn.no {
+  color: var(--no-color);
+  background: var(--no-bg);
+  border: none;
+}
+
+.side-btn.no:hover,
+.side-btn.no.active {
+  background: var(--danger);
+  color: #fff;
+  border: none;
+}
+
+.amount-input {
+  margin-bottom: 20px;
+}
+
+.amount-input label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.amount-input input {
+  width: 100%;
+  padding: 14px;
+  font-size: 18px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  text-align: center;
+}
+
+.amount-input input:focus {
+  outline: none;
+  border-color: var(--text-muted);
+}
+
+.trade-btn,
+.submit-btn {
+  width: 100%;
+  padding: 14px;
+  font-size: 15px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.trade-btn {
+  background: var(--text);
+  color: var(--bg);
+}
+
+.trade-btn:hover {
+  opacity: 0.9;
+}
+
+.submit-btn.yes {
+  background: var(--primary);
+  color: var(--text-inverse);
+}
+
+.submit-btn.yes:hover {
+  background: var(--primary-hover);
+}
+
+.submit-btn.no {
+  background: var(--danger);
+  color: var(--text-inverse);
+}
+
+.submit-btn.no:hover {
+  background: var(--danger-hover);
+}
+
+.submit-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.summary-row .profit {
+  color: var(--yes-color);
+  font-weight: 600;
+}
+
+/* Options List */
+.options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 20px;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-alt);
+}
+
+.options-header {
+  padding: 10px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  background: var(--bg-alt);
+  border-bottom: 1px solid var(--border);
+}
+
+.option-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg);
+  cursor: pointer;
+  transition: all 0.15s;
+  border-bottom: 1px solid var(--border);
+}
+
+.option-row:first-child { border-radius: 12px 12px 0 0; }
+.option-row:last-child { border-bottom: none; border-radius: 0 0 12px 12px; }
+.option-row:only-child { border-radius: 12px; }
+.option-row:hover { background: var(--bg-alt); }
+
+.option-row.selected {
+  background: var(--bg-alt);
+  border-left: 3px solid var(--text);
+}
+
+.option-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.option-price {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  min-width: 48px;
+  text-align: right;
+}
+
+.option-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.option-btn {
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: var(--bg);
+  color: var(--text-muted);
+}
+
+.option-btn:hover {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.option-btn.yes { border-color: var(--yes-bg); color: var(--yes-color); }
+.option-btn.yes:hover { background: var(--yes-bg); border-color: var(--yes-color); }
+.option-btn.yes.active { background: var(--yes-color); border-color: var(--yes-color); color: var(--text-inverse); }
+
+.option-btn.no { border-color: var(--no-bg); color: var(--no-color); }
+.option-btn.no:hover { background: var(--no-bg); border-color: var(--no-color); }
+.option-btn.no.active { background: var(--no-color); border-color: var(--no-color); color: #fff; }
+
+/* Trade Summary */
+.trade-summary {
+  background: var(--bg-alt);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+  border-top: 1px solid var(--border);
+  margin-top: 20px;
+}
+
+.summary-line {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.summary-line:not(:last-child) {
+  border-bottom: 1px solid var(--border);
+}
+
+.summary-line .bold { color: var(--text); font-weight: 600; }
+.summary-line .green { color: var(--primary); font-weight: 600; }
+
+/* Price Display */
+.price-display {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.price-box {
+  flex: 1;
+  padding: 20px;
+  border-radius: 12px;
+  text-align: center;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.price-box:hover { border-color: var(--text-muted); }
+
+.price-box.yes.selected,
+.price-box.no.selected {
+  border-color: var(--text);
+  background: var(--bg-alt);
+}
+
+.price-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+.price-value {
+  font-size: 32px;
+  font-weight: 700;
+}
+
+.price-box.yes .price-value { color: var(--yes-color); }
+.price-box.no .price-value { color: var(--no-color); }
+
+/* Trade Tabs */
+.trade-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.trade-tab {
+  flex: 1;
+  padding: 10px;
+  font-weight: 600;
+  font-size: 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  cursor: pointer;
+  color: var(--text);
+  transition: all 0.15s;
+}
+
+.trade-tab.active.yes {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--text-inverse);
+}
+
+.trade-tab.active.no {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--text-inverse);
+}
+
+/* Input Row */
+.input-row {
+  margin-bottom: 16px;
+}
+
+.input-row label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.input-row input {
+  width: 100%;
+  padding: 12px;
+  font-size: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.input-row input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.order-status {
+  margin-top: 12px;
+  padding: 10px;
+  background: var(--bg);
+  border-radius: 6px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* Color Utilities */
+.yes-color { color: var(--yes-color) !important; }
+.no-color { color: var(--no-color) !important; }
+
+/* Outcome Table Buttons - used in TradePage */
+.btn-yes,
+.btn-no {
+  display: inline-block;
+  padding: 6px 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.btn-yes {
+  background: var(--primary);
+  color: var(--text-inverse);
+}
+
+.btn-yes:hover {
+  opacity: 0.9;
+}
+
+.btn-no {
+  background: var(--no-bg);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+
+.btn-no:hover {
+  background: rgba(220, 38, 38, 0.2);
+}
+
+/* Mobile: compact buttons */
+@media (max-width: 900px) {
+  .btn-yes,
+  .btn-no {
+    padding: 5px 8px;
+    font-size: 11px;
+  }
+}
+

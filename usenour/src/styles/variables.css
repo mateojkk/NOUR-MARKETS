@@ -1,0 +1,109 @@
+/*
+ * ============================================================================
+ * VARIABLES - Colors, fonts, and spacing
+ * Base: Near-black (#1c1c1c) + Paper (#efede3), Mint accent (#afd9c6)
+ * ============================================================================
+ */
+
+/* === NOUR PALETTE - Light Mode (Paper base) === */
+:root {
+  /* Fonts */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, system-ui, sans-serif;
+  --font-display: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Paper-based backgrounds */
+  --bg: #efede3;
+  --bg-alt: #e5e3d9;
+  --bg-sidebar: #f5f3e9;
+  --bg-panel: #f5f3e9;
+  --bg-card: #faf8ee;
+  --border: #d5d3c9;
+  --border-light: #e0ded4;
+  
+  /* Asphalt-based text */
+  --text: #302f2c;
+  --text-muted: #5a5955;
+  --text-light: #7a7973;
+  --text-inverse: #efede3;
+  
+  /* Primary - Mint Green */
+  --primary: #5eae8b;
+  --primary-hover: #4d9e7b;
+  --primary-muted: #d1e8dd;
+  --primary-dark: #3d8a66;
+  --primary-darker: #2d7453;
+  
+  /* Danger/No - Red */
+  --danger: #dc2626;
+  --danger-hover: #b91c1c;
+  --danger-muted: #fecaca;
+  --danger-dark: #991b1b;
+  
+  /* Success - Green */
+  --success: #16a34a;
+  --success-muted: #bbf7d0;
+  --success-dark: #15803d;
+  
+  /* Warning - Amber */
+  --warning: #d97706;
+  --warning-muted: #fde68a;
+  
+  /* Yes/No option colors */
+  --yes-color: #5eae8b;
+  --yes-bg: rgba(94, 174, 139, 0.15);
+  --no-color: #dc2626;
+  --no-bg: rgba(220, 38, 38, 0.1);
+  
+  /* Accent color */
+  --accent-blue: #5eae8b;
+}
+
+/* === Dark Mode (Asphalt base) === */
+.dark {
+  /* Fonts */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, system-ui, sans-serif;
+  --font-display: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Asphalt-based backgrounds */
+  --bg: #1c1c1c;
+  --bg-alt: #3a3936;
+  --bg-sidebar: #262522;
+  --bg-panel: #282725;
+  --border: #4a4946;
+  --border-light: #5a5955;
+  
+  /* Paper-based text */
+  --text: #efede3;
+  --text-muted: #b5b3a9;
+  --text-light: #8a887e;
+  --text-inverse: #302f2c;
+  
+  /* Primary - Mint Green */
+  --primary: #afd9c6;
+  --primary-hover: #c4e6d6;
+  --primary-muted: #1a2f26;
+  --primary-dark: #7cb99e;
+  
+  /* Danger/No - Red */
+  --danger: #ef4444;
+  --danger-hover: #f87171;
+  --danger-muted: #1f1212;
+  
+  /* Success - Green */
+  --success: #22c55e;
+  --success-muted: #14532d;
+  
+  /* Warning - Amber */
+  --warning: #f59e0b;
+  
+  /* Yes/No option colors */
+  --yes-color: #afd9c6;
+  --yes-bg: rgba(175, 217, 198, 0.12);
+  --no-color: #ef4444;
+  --no-bg: rgba(239, 68, 68, 0.12);
+  
+  /* Accent color */
+  --accent-blue: #afd9c6;
+}

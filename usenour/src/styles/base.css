@@ -1,0 +1,102 @@
+/*
+ * ============================================================================
+ * BASE - Reset, body, scrollbars, global utilities
+ * ============================================================================
+ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Universal removal of rings, outlines, and focus rings around boxes, buttons, inputs */
+*, *::before, *::after {
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+  --tw-ring-color: transparent !important;
+  --tw-shadow: 0 0 #0000 !important;
+}
+
+button,
+button:focus,
+button:focus-visible,
+button:active,
+input,
+input:focus,
+input:focus-visible,
+select,
+select:focus,
+select:focus-visible,
+textarea,
+textarea:focus,
+textarea:focus-visible,
+[role="button"],
+[role="button"]:focus,
+[role="button"]:focus-visible,
+a:focus,
+a:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+button {
+  border: none;
+}
+
+/* Force our color scheme over Tailwind defaults */
+html {
+  background: var(--bg);
+}
+
+html.dark {
+  background: #1c1c1c;
+  color-scheme: dark;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  text-shadow: none;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Button press effect */
+button:active,
+.btn-yes:active,
+.btn-no:active,
+.option-btn:active,
+.subcategory-pill:active,
+.icon-btn:active,
+.connect-btn:active,
+.submit-btn:active {
+  transform: scale(0.97);
+}

@@ -1,0 +1,149 @@
+.authButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  background: var(--bg-alt);
+  border: none;
+  outline: none;
+  box-shadow: none;
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.authButton:hover {
+  background: var(--bg-panel);
+}
+
+.authButtonLoading {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.authButtonAuthenticated {
+  background: var(--bg);
+}
+
+.walletDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.walletDotConnected {
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.5);
+}
+
+.authDropdownContainer {
+  position: relative;
+}
+
+.authDropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 200px;
+  background: var(--bg-panel);
+  border: none;
+  outline: none;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.authDropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+}
+
+.authDropdownItem:hover {
+  background: var(--bg-alt);
+}
+
+.walletAddress {
+  border-bottom: none;
+  cursor: default;
+}
+
+.walletAddress:hover {
+  background: none;
+}
+
+.walletInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.walletLabel {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.walletValue {
+  font-family: var(--font-mono);
+  color: var(--text);
+}
+
+.logoutItem {
+  color: #ef4444;
+}
+
+.logoutItem:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.authDropdownActions {
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px 12px;
+  border-bottom: none;
+}
+
+.actionBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--bg-alt);
+  border: none;
+  outline: none;
+  box-shadow: none;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.actionBtn:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.spinnerSmall {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--text);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
