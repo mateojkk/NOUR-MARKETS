@@ -18,7 +18,8 @@ Prediction markets are truth machines, but existing decentralized prediction ven
 ### The Nour Solution
 **Nour** is an institutional-grade, consumer-first prediction market trading platform built natively on **Somnia Layer 1** and powered by **DreamDEX Event Contracts**:
 - **Sub-Second Responsiveness**: Leverages Somnia's ultra-fast EVM block times for instantaneous order matching and cancellation.
-- **Frictionless Onboarding**: 1-click social authentication via Magic Link (Email or Google) plus support for standard Web3 wallets (MetaMask, Rabby, Injected).
+- **Frictionless Onboarding**: Passwordless email login (6-digit code via Magic) plus support for standard Web3 wallets (MetaMask, Rabby, Injected) — no browser-extension requirement for testnet users.
+- **Live On-Chain Markets Only**: Every market card is a real DreamDEX event contract served from the indexer — no demo or synthetic listings.
 - **Native Testnet Faucet**: Integrated 1-click claim button delivering 1,000 `tUSDC` testnet collateral directly in the app.
 - **Complete Contract Lifecycle**: Direct support for Binary Pool orders (Buy Up / Buy Down, IOC taker, Post-Only maker), complete set minting/burning, and 1-click settlement redemption.
 - **Vercel Serverless Monorepo**: Zero-maintenance, globally distributed serverless architecture that deploys instantly and scales indefinitely.
@@ -79,12 +80,14 @@ Prediction markets are truth machines, but existing decentralized prediction ven
 
 ### Innovation & Originality (20%)
 - Brings high-frequency binary prediction contracts into an ultra-clean, minimalist consumer interface.
-- Solves the Web3 UX barrier by combining Magic Link frictionless login on Somnia with direct on-chain CLOB execution.
+- Solves the Web3 UX barrier by combining passwordless email login on Somnia with direct on-chain CLOB execution.
+- Every market is a real on-chain DreamDEX event contract — live-served from the indexer, no demo data.
 
 ### Technical Implementation (25%)
 - 100% compliant with DreamDEX Event Contracts specifications and CREATE3 contract addresses.
 - Built as a modern Vercel Serverless Monorepo with TypeScript, Viem, Wagmi, and Ethers v6.
 - Full cycle tested: Faucet → Order Placement → Balances → Settlement Redemption.
+- Grid-aware tick/lot quantization (1e6 testnet vs 1e18 mainnet), real OHLC candle charts, live GraphQL-WS market feed.
 
 ### User Experience & Design (20%)
 - Premium dark-mode aesthetic with real-time multi-line charts, intuitive Buy Up / Buy Down controls, and live countdown timers to market expiry.
@@ -93,6 +96,7 @@ Prediction markets are truth machines, but existing decentralized prediction ven
 ### Business & Ecosystem Impact (20%)
 - Directly drives trading volume, active wallets, and transaction counts onto the Somnia blockchain.
 - Demonstrates what high-throughput prediction markets look like when powered by Somnia's sub-second finality.
+- Social-first: shares live countdowns and predictions to Telegram/community feeds, drawing consumers into the Somnia Discord & Telegram ecosystem.
 
 ### Presentation & Demo (15%)
 - Complete demo video script, storyboard, and testnet deployment instructions below.
@@ -106,8 +110,8 @@ Prediction markets are truth machines, but existing decentralized prediction ven
 - **Narrator**: "Welcome to Nour — the next-generation prediction market interface built specifically for Somnia and DreamDEX Event Contracts. Traditional prediction platforms are slow, complex, and clunky. Nour brings sub-second execution, crystal-clear probability pricing, and effortless onboarding to Somnia."
 
 ### [0:30 - 1:00] Frictionless Onboarding & Faucet
-- **Visual**: Show 1-click login with Magic Link (Google/Email) or connecting MetaMask on Somnia Shannon Testnet. Click "Deposit / Faucet" and claim 1,000 free testnet `tUSDC`.
-- **Narrator**: "Getting started takes five seconds. Users log in with Google or their Web3 wallet. If they need collateral, our integrated faucet claims 1,000 tUSDC directly on Somnia Shannon testnet with one click."
+- **Visual**: Show passwordless email login (6-digit code) or connecting MetaMask on Somnia Shannon Testnet. Click "Deposit / Faucet" and claim 1,000 free testnet `tUSDC`.
+- **Narrator**: "Getting started takes five seconds. Users sign in with their email — a 6-digit code, no password — or connect their Web3 wallet. If they need collateral, our integrated faucet claims 1,000 tUSDC directly on Somnia Shannon testnet with one click."
 
 ### [1:00 - 1:50] Real-Time Trading Experience
 - **Visual**: Select a 15-minute Bitcoin window. View the live probability chart and outcome table. Enter 50 contracts, select "Buy Up (Yes)", review payout, and submit the order.

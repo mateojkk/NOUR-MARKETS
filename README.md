@@ -8,11 +8,13 @@ nour is a next-gen prediction market platform built for speed, clarity, and sub-
 Built for the **Somnia × DreamDEX Event Contracts Hackathon**.
 
 ### features
-- **Sub-second execution**: high-frequency binary prediction trading (BTC & ETH in 5m, 15m, 1h windows) powered by Somnia's ultra-fast finality.
+- **Sub-second execution**: high-frequency binary prediction trading on live DreamDEX Event Contracts (5m, 15m, 1h rolling windows) powered by Somnia's ultra-fast finality.
+- **Real on-chain markets only**: live markets are served straight from the DreamDEX indexer — no demo or synthetic listings.
 - **On-chain CLOB trading**: direct interaction with DreamDEX Event Contracts (Buy Up / Buy Down, maker post-only & taker IOC).
-- **1-click onboarding**: seamless Magic Link social login (Email/Google) + Web3 wallet support (MetaMask, Rabby, Injected).
+- **Passwordless email login (6-digit code) + Web3 wallet support** (MetaMask, Rabby, Injected) — no social OAuth.
 - **Integrated testnet faucet**: 1-click testnet `tUSDC` minting directly in the UI.
 - **Automated settlement**: claim 1:1 payouts for winning positions after market expiry.
+- **Real-time price charts**: live OHLC candle history from the DreamDEX indexer.
 - **Minimalist, premium dark-mode interface**: institutional-grade charts, group series views, and real-time order flow.
 
 ### tech stack
