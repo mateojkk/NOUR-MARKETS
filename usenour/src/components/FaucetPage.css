@@ -1,179 +1,42 @@
 /* 
- * FaucetPage.css - Dedicated styling for Somnia Testnet Faucet Page
+ * FaucetPage.css - Streamlined styling for Somnia Testnet Faucet Page
  */
 
 .faucet-page-container {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 32px 20px 80px;
+  max-width: 480px;
+  margin: 40px auto 80px;
+  padding: 0 16px;
   font-family: var(--font-sans);
 }
 
-.faucet-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
-  gap: 16px;
-}
-
-.faucet-header h1 {
-  font-size: 26px;
-  font-weight: 600;
-  color: var(--text);
-  margin: 0 0 6px;
-  letter-spacing: -0.4px;
-}
-
-.faucet-subtitle {
-  font-size: 14px;
-  color: var(--text-muted);
-  margin: 0;
-  line-height: 1.5;
-}
-
-.faucet-refresh-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  border: none;
+.faucet-card {
   background: var(--bg-panel);
-  color: var(--text-muted);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: all 0.15s ease;
-}
-
-.faucet-refresh-btn:hover {
-  color: var(--primary);
-  background: var(--bg-alt);
-}
-
-.faucet-refresh-btn.spinning svg {
-  animation: spin 0.8s linear infinite;
-}
-
-/* Account Card */
-.faucet-account-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 20px;
-  background: var(--bg-panel);
-  border-radius: 14px;
-  padding: 18px 24px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-}
-
-.account-info {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.account-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-}
-
-.account-label {
-  color: var(--text-muted);
-  font-weight: 500;
-}
-
-.faucet-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  background: var(--bg-alt);
-  border-radius: 6px;
-  border: none;
-  font-size: 12px;
-  font-family: var(--font-mono);
-  color: var(--text);
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.faucet-chip:hover {
-  background: var(--border);
-}
-
-.network-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
-  background: var(--bg-alt);
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-muted);
-}
-
-.network-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #10b981;
-}
-
-.balance-highlight {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-}
-
-.balance-label {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-}
-
-.balance-amount {
-  font-family: var(--font-mono);
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--primary);
-}
-
-.balance-unit {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-muted);
-}
-
-/* Main Claim Card */
-.faucet-main-card {
-  background: var(--bg-panel);
+  border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 28px 24px;
-  margin-bottom: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
 }
 
-.card-top {
+/* Card Header */
+.faucet-card-header {
   display: flex;
-  align-items: flex-start;
-  gap: 16px;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
 }
 
-.faucet-badge {
-  width: 50px;
-  height: 50px;
-  border-radius: 14px;
+.faucet-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.faucet-icon-wrap {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   background: var(--yes-bg);
   color: var(--primary);
   display: flex;
@@ -182,210 +45,202 @@
   flex-shrink: 0;
 }
 
-.card-top-info h2 {
-  font-size: 18px;
+.faucet-title-group h2 {
+  font-size: 16px;
   font-weight: 600;
   color: var(--text);
-  margin: 0 0 6px;
-}
-
-.card-top-info p {
-  font-size: 13px;
-  color: var(--text-muted);
   margin: 0;
-  line-height: 1.5;
+  letter-spacing: -0.2px;
 }
 
-.card-actions {
+.faucet-balance-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-alt);
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.balance-label {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.balance-val {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.balance-token {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.faucet-refresh-btn {
+  background: none;
+  border: none;
+  padding: 2px;
+  color: var(--text-muted);
+  cursor: pointer;
   display: flex;
   align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color 0.15s ease;
 }
 
-.claim-btn {
+.faucet-refresh-btn:hover {
+  color: var(--text);
+}
+
+.faucet-refresh-btn.spinning svg,
+.spinning {
+  animation: spin 0.8s linear infinite;
+}
+
+/* Card Body */
+.faucet-body {
+  padding: 32px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 20px;
+}
+
+.faucet-amount-hero {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+}
+
+.amount-number {
+  font-family: var(--font-mono);
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: -1px;
+  color: var(--text);
+  line-height: 1;
+}
+
+.amount-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.faucet-claim-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  padding: 14px 24px;
+  padding: 13px 20px;
   background: var(--primary);
   color: #12151c;
-  border-radius: 12px;
-  font-size: 15px;
+  border-radius: 10px;
+  font-size: 14px;
   font-weight: 600;
   border: none;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
-.claim-btn:hover:not(:disabled) {
+.faucet-claim-btn:hover:not(:disabled) {
   opacity: 0.92;
   transform: translateY(-1px);
 }
 
-.claim-btn:disabled {
+.faucet-claim-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  transform: none;
 }
 
-/* Alerts */
-.faucet-alert {
+/* Feedback Status Messages */
+.faucet-status-msg {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  border-radius: 10px;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 8px;
   font-size: 13px;
   font-weight: 500;
 }
 
-.faucet-alert.error {
-  background: rgba(239, 68, 68, 0.12);
-  color: #ef4444;
-}
-
-.faucet-alert.success {
+.faucet-status-msg.success {
   background: rgba(16, 185, 129, 0.12);
   color: #10b981;
 }
 
-/* Gas Requirement Card */
-.faucet-gas-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  background: var(--bg-panel);
-  border-radius: 14px;
-  padding: 20px 24px;
-  margin-bottom: 24px;
-  flex-wrap: wrap;
+.faucet-status-msg.error {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
 }
 
-.gas-card-left {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex: 1;
-  min-width: 260px;
-}
-
-.gas-icon-wrap {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: var(--bg-alt);
-  color: #f59e0b;
+/* Card Footer */
+.faucet-footer {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-}
-
-.gas-card-left h3 {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-  margin: 0 0 4px;
-}
-
-.gas-card-left p {
+  gap: 6px;
+  padding: 14px 20px;
+  background: var(--bg-alt);
+  border-top: 1px solid var(--border);
   font-size: 12px;
   color: var(--text-muted);
-  margin: 0;
-  line-height: 1.4;
 }
 
-.gas-link-btn {
+.faucet-footer .gas-link {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  background: var(--bg-alt);
+  gap: 4px;
   color: var(--text);
-  border-radius: 8px;
-  font-size: 12px;
   font-weight: 500;
   text-decoration: none;
-  transition: all 0.15s;
+  transition: color 0.15s ease;
 }
 
-.gas-link-btn:hover {
-  background: var(--border);
+.faucet-footer .gas-link:hover {
   color: var(--primary);
+  text-decoration: underline;
 }
 
-/* Wallet Actions Section */
-.faucet-wallet-actions {
-  background: var(--bg-panel);
-  border-radius: 16px;
-  padding: 24px;
-}
-
-.section-title {
+/* Empty / Not Connected State */
+.faucet-card.empty {
+  padding: 48px 24px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text);
-  margin: 0 0 16px;
-}
-
-/* Empty State */
-.faucet-empty-card {
   text-align: center;
-  padding: 60px 24px;
-  background: var(--bg-panel);
-  border-radius: 16px;
+  gap: 12px;
 }
 
-.empty-icon-wrap {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: var(--bg-alt);
+.faucet-empty-icon {
   color: var(--text-muted);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 16px;
+  opacity: 0.6;
 }
 
-.faucet-empty-card h3 {
-  font-size: 20px;
+.faucet-card.empty h2 {
+  font-size: 18px;
   font-weight: 600;
   color: var(--text);
-  margin: 0 0 8px;
+  margin: 0;
 }
 
-.faucet-empty-card p {
-  font-size: 14px;
+.faucet-card.empty p {
+  font-size: 13px;
   color: var(--text-muted);
-  max-width: 440px;
-  margin: 0 auto;
-  line-height: 1.5;
+  margin: 0;
 }
 
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
-}
-
-@media (max-width: 640px) {
-  .faucet-account-card,
-  .faucet-gas-card {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .balance-highlight {
-    align-items: flex-start;
-    width: 100%;
-    padding-top: 12px;
-    border-top: 1px solid var(--border);
-  }
-  .gas-link-btn {
-    width: 100%;
-    justify-content: center;
-  }
 }
