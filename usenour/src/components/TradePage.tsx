@@ -1,11 +1,10 @@
-import React, { useState, useMemo } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import React, { useState, useMemo, useEffect } from "react";
+import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import { ArrowLeft, TrendingUp } from "lucide-react";
 import { useEvmWallet } from "../contexts/EvmWalletContext";
 import type { Market, MarketGroup } from "../types";
 import { getSubtitle, formatMarketTitle, resolveMarketIcon } from "../types";
-import { recordTrade } from "../services/userService";
-import { calculatePlatformFee } from "../config/fees";
+import { recordTrade, getPositions, type PositionRecord } from "../services/userService";
 import { placeDreamDexOrder, DREAMDEX_CONTRACTS } from "../services/dreamdex";
 import PriceChart from "./PriceChart";
 import styles from "./TradePage.module.css";
@@ -22,6 +21,7 @@ const TradePage: React.FC<TradePageProps> = ({
   onOrderComplete,
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const { address, connected, collateralBalance, walletProvider, refreshBalance } = useEvmWallet();
   const evmAddress = address || null;
@@ -30,7 +30,28 @@ const TradePage: React.FC<TradePageProps> = ({
   const urlAction = searchParams.get("action") as "buy" | "sell" | null;
   const urlSide = searchParams.get("side") as "yes" | "no" | null;
 
-  const [selectedMarket, setSelectedMarket] = useState<Market>(group.markets[0] || ({} as Market));
+  // Match specific market from URL /trade/:ticker if present
+  const routeTicker = useMemo(() => {
+    const match = location.pathname.match(/\/trade\/([^/?#]+)/);
+    return match ? decodeURIComponent(match[1]) : null;
+  }, [location.pathname]);
+
+  const initialMarket = useMemo(() => {
+    if (routeTicker) {
+      const found = group.markets.find((m) => m.ticker === routeTicker);
+      if (found) return found;
+    }
+    return group.markets[0] || ({} as Market);
+  }, [group.markets, routeTicker]);
+
+  const [selectedMarket, setSelectedMarket] = useState<Market>(initialMarket);
+
+  useEffect(() => {
+    if (initialMarket && initialMarket.ticker && initialMarket.ticker !== selectedMarket.ticker) {
+      setSelectedMarket(initialMarket);
+    }
+  }, [initialMarket, selectedMarket.ticker]);
+
   const [orderSide, setOrderSide] = useState<"yes" | "no">(urlSide || "yes");
   const [tradeAction, setTradeAction] = useState<"buy" | "sell">(urlAction || "buy");
   const [orderAmount, setOrderAmount] = useState<number | "">("");
@@ -44,8 +65,44 @@ const TradePage: React.FC<TradePageProps> = ({
     : group.markets.slice(0, MAX_VISIBLE_OUTCOMES);
   const hasMoreOutcomes = group.markets.length > MAX_VISIBLE_OUTCOMES;
 
+  // Query user positions to provide holding context and quick-sell shortcuts
+  const [userPositions, setUserPositions] = useState<PositionRecord[]>([]);
+
+  const fetchPositions = async () => {
+    if (!evmAddress) {
+      setUserPositions([]);
+      return;
+    }
+    try {
+      const res = await getPositions(evmAddress);
+      const arr: PositionRecord[] = Array.isArray(res)
+        ? res
+        : Array.isArray((res as any)?.positions)
+        ? (res as any).positions
+        : [];
+      setUserPositions(arr);
+    } catch {
+      setUserPositions([]);
+    }
+  };
+
+  useEffect(() => {
+    fetchPositions();
+  }, [evmAddress]);
+
+  const heldPosition = useMemo(() => {
+    return userPositions.find(
+      (p) => p.ticker === selectedMarket.ticker && (p.contracts || 0) > 0
+    );
+  }, [userPositions, selectedMarket.ticker]);
+
+  // Live market updated from websocket feed without re-triggering market selection
+  const activeMarket = useMemo(() => {
+    return group.markets.find((m) => m.ticker === selectedMarket.ticker) || selectedMarket;
+  }, [group.markets, selectedMarket]);
+
   // Derive active price based on outcome side
-  const price = orderSide === "yes" ? selectedMarket.price_yes : selectedMarket.price_no;
+  const price = orderSide === "yes" ? activeMarket.price_yes : activeMarket.price_no;
   
   // Calculate cost and shares
   const cost = inputType === "usd" 
@@ -56,12 +113,17 @@ const TradePage: React.FC<TradePageProps> = ({
     ? Number(orderAmount) || 0
     : Math.floor((Number(orderAmount) || 0) / (price / 100));
   
-  const platformFee = calculatePlatformFee(cost);
-  const totalWithFee = cost + platformFee;
+  const totalWithFee = cost;
+  const netSellProceeds = cost;
   
   const potentialReturn = shares; // Each winning contract pays 1 tUSDC
   const expectedProfit = Math.max(0, potentialReturn - totalWithFee);
   const roi = totalWithFee > 0 ? (expectedProfit / totalWithFee) * 100 : 0;
+
+  // Realized P&L calculation when selling an existing position
+  const costBasis = heldPosition && heldPosition.avg_price ? (heldPosition.avg_price / 100) * shares : null;
+  const estSellPnl = costBasis !== null ? netSellProceeds - costBasis : null;
+  const estSellPnlPct = costBasis && costBasis > 0 ? (estSellPnl! / costBasis) * 100 : null;
 
   const handleTrade = async () => {
     if (!connected || !walletProvider) {
@@ -73,8 +135,12 @@ const TradePage: React.FC<TradePageProps> = ({
       return;
     }
 
-    const poolAddress = selectedMarket.poolAddress || DREAMDEX_CONTRACTS.binaryMarketsModule;
-    setOrderStatus("Submitting to Somnia...");
+    const poolAddress = activeMarket.poolAddress || selectedMarket.poolAddress;
+    if (!poolAddress || poolAddress.toLowerCase() === DREAMDEX_CONTRACTS.binaryMarketsModule.toLowerCase()) {
+      onOrderComplete?.(false, "This market does not have an active on-chain trading pool. Please select a LIVE market.");
+      return;
+    }
+    setOrderStatus(tradeAction === "sell" ? "Authorizing tokens & selling..." : "Submitting to Somnia...");
 
     try {
       const result = await placeDreamDexOrder({
@@ -84,11 +150,15 @@ const TradePage: React.FC<TradePageProps> = ({
         action: tradeAction,
         priceProb: price / 100,
         contractsAmount: shares,
-        orderType: "ioc",
+        orderType: "limit",
       });
 
       // Record trade locally
       if (evmAddress) {
+        const estPnl = tradeAction === "sell" && heldPosition
+          ? ((price - (heldPosition.avg_price || price)) * shares) / 100
+          : undefined;
+
         await recordTrade(evmAddress, {
           ticker: selectedMarket.ticker,
           title: group.title,
@@ -96,24 +166,29 @@ const TradePage: React.FC<TradePageProps> = ({
           action: tradeAction,
           amount: shares,
           price: price,
-          total_cost: totalWithFee,
+          total_cost: tradeAction === "sell" ? netSellProceeds : totalWithFee,
           platform: "dreamdex",
           tx_signature: result.txHash,
-          platform_fee: platformFee,
+          platform_fee: 0,
+          pnl: estPnl,
         }).catch(() => {});
+
+        await fetchPositions();
       }
 
       await refreshBalance();
       setOrderStatus(null);
       onOrderComplete?.(
         true,
-        `Executed on Somnia Shannon! ${tradeAction.toUpperCase()} ${shares} ${orderSide.toUpperCase()} at ${price}¢ (Tx: ${result.txHash.slice(0, 10)}...)`
+        tradeAction === "sell"
+          ? `Closed ${shares} ${orderSide.toUpperCase()} on Somnia Shannon! Payout: $${netSellProceeds.toFixed(2)} tUSDC (Tx: ${result.txHash.slice(0, 10)}...)`
+          : `Executed on Somnia Shannon! BUY ${shares} ${orderSide.toUpperCase()} at ${price}¢ (Tx: ${result.txHash.slice(0, 10)}...)`
       );
       setOrderAmount("");
     } catch (error: any) {
       console.error("DreamDEX trade error:", error);
       setOrderStatus(null);
-      const msg = error?.reason || error?.message || "Trade submission failed. Check your tUSDC balance.";
+      const msg = error?.reason || error?.message || "Trade submission failed.";
       onOrderComplete?.(false, msg);
     }
   };
@@ -123,23 +198,23 @@ const TradePage: React.FC<TradePageProps> = ({
     : null;
 
   const chartMarkets = useMemo(() => {
-    if (selectedMarket) {
+    if (activeMarket && activeMarket.ticker) {
       return [
         {
-          ticker: `${selectedMarket.ticker}-yes`,
+          ticker: `${activeMarket.ticker}-yes`,
           name: "Up (Yes)",
-          currentPrice: selectedMarket.price_yes,
+          currentPrice: activeMarket.price_yes,
           color: "#5eae8b",
-          tokenId: selectedMarket.yes_token_id,
-          marketId: selectedMarket.marketId,
+          tokenId: activeMarket.yes_token_id,
+          marketId: activeMarket.marketId,
         },
         {
-          ticker: `${selectedMarket.ticker}-no`,
+          ticker: `${activeMarket.ticker}-no`,
           name: "Down (No)",
-          currentPrice: selectedMarket.price_no,
+          currentPrice: activeMarket.price_no,
           color: "#ef4444",
-          tokenId: selectedMarket.no_token_id,
-          marketId: selectedMarket.marketId,
+          tokenId: activeMarket.no_token_id,
+          marketId: activeMarket.marketId,
         },
       ];
     }
@@ -150,7 +225,7 @@ const TradePage: React.FC<TradePageProps> = ({
       tokenId: m.yes_token_id,
       marketId: m.marketId,
     }));
-  }, [selectedMarket, group.markets, group.title]);
+  }, [activeMarket, group.markets, group.title]);
 
   return (
     <div className={styles.page}>
@@ -262,10 +337,55 @@ const TradePage: React.FC<TradePageProps> = ({
               {group.title.length > 40 ? group.title.substring(0, 40) + "..." : group.title}
             </div>
             <div className={styles.tradePanelSubtitle}>
-              {tradeAction === "buy" ? "Buy" : "Sell"} {orderSide === "yes" ? "UP (YES)" : "DOWN (NO)"} • {getSubtitle(selectedMarket, group.title)}
+              {tradeAction === "buy" ? "Buy" : "Sell / Close"} {orderSide === "yes" ? "UP (YES)" : "DOWN (NO)"} • {getSubtitle(selectedMarket, group.title)}
             </div>
           </div>
         </div>
+
+        {/* Position Context Banner if user holds contracts */}
+        {heldPosition && (
+          <div className={styles.positionBanner}>
+            <div className={styles.positionBannerLeft}>
+              <span className={`${styles.positionSideTag} ${heldPosition.side === "yes" ? styles.up : styles.down}`}>
+                {heldPosition.side === "yes" ? "UP" : "DOWN"}
+              </span>
+              <div className={styles.positionBannerInfo}>
+                <span className={styles.positionBannerTitle}>
+                  You hold <strong>{heldPosition.contracts.toLocaleString()}</strong> contracts
+                </span>
+                <span className={styles.positionBannerSub}>
+                  Entry: {(heldPosition.avg_price || 50).toFixed(1)}¢ · Mark: {price}¢
+                </span>
+              </div>
+            </div>
+
+            {tradeAction === "buy" ? (
+              <button
+                type="button"
+                className={styles.positionBannerAction}
+                onClick={() => {
+                  setTradeAction("sell");
+                  setOrderSide(heldPosition.side as "yes" | "no");
+                  setInputType("shares");
+                  setOrderAmount(heldPosition.contracts);
+                }}
+              >
+                Close / Sell ↗
+              </button>
+            ) : (
+              <button
+                type="button"
+                className={styles.positionBannerAction}
+                onClick={() => {
+                  setInputType("shares");
+                  setOrderAmount(heldPosition.contracts);
+                }}
+              >
+                Sell All (100%)
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Buy/Sell Toggle */}
         <div className={styles.buySellToggle}>
@@ -277,9 +397,20 @@ const TradePage: React.FC<TradePageProps> = ({
           </button>
           <button 
             className={`${styles.toggleBtn} ${tradeAction === "sell" ? styles.active : ""}`}
-            onClick={() => setTradeAction("sell")}
+            onClick={() => {
+              setTradeAction("sell");
+              if (heldPosition) {
+                setOrderSide(heldPosition.side as "yes" | "no");
+                setInputType("shares");
+                if (!orderAmount) {
+                  setOrderAmount(heldPosition.contracts);
+                }
+              } else {
+                setInputType("shares");
+              }
+            }}
           >
-            Sell
+            Sell / Close
           </button>
         </div>
 
@@ -289,13 +420,13 @@ const TradePage: React.FC<TradePageProps> = ({
             className={`${styles.sideBtn} ${styles.yes} ${orderSide === "yes" ? styles.active : ""}`}
             onClick={() => setOrderSide("yes")}
           >
-            Up (Yes) {selectedMarket.price_yes}¢
+            Up (Yes) {activeMarket.price_yes}¢
           </button>
           <button
             className={`${styles.sideBtn} ${styles.no} ${orderSide === "no" ? styles.active : ""}`}
             onClick={() => setOrderSide("no")}
           >
-            Down (No) {selectedMarket.price_no}¢
+            Down (No) {activeMarket.price_no}¢
           </button>
         </div>
 
@@ -303,14 +434,16 @@ const TradePage: React.FC<TradePageProps> = ({
         <div className={styles.amountSection}>
           <div className={styles.amountHeader}>
             <span className={styles.amountLabel}>
-              {inputType === "usd" ? "Amount (tUSDC)" : "Shares"}
+              {tradeAction === "sell" ? "Contracts to Sell" : inputType === "usd" ? "Amount (tUSDC)" : "Shares"}
             </span>
-            <button 
-              className={styles.currencyToggle}
-              onClick={() => setInputType(prev => prev === "usd" ? "shares" : "usd")}
-            >
-              Switch to {inputType === "usd" ? "shares" : "tUSDC"} ▾
-            </button>
+            {tradeAction === "buy" && (
+              <button 
+                className={styles.currencyToggle}
+                onClick={() => setInputType(prev => prev === "usd" ? "shares" : "usd")}
+              >
+                Switch to {inputType === "usd" ? "shares" : "tUSDC"} ▾
+              </button>
+            )}
           </div>
           <div className={styles.inputContainer}>
             {inputType === "usd" && <span className={styles.currencyPrefix}>$</span>}
@@ -327,31 +460,76 @@ const TradePage: React.FC<TradePageProps> = ({
               className={styles.amountInput}
             />
           </div>
-          <div className={styles.summaryRow}>
-             <span>Est. {inputType === "usd" ? "Shares" : "Cost"}:</span>
-             <span>{inputType === "usd" ? shares : `$${cost.toFixed(2)}`}</span>
-          </div>
-          <div className={`${styles.summaryRow} ${styles.feeRow}`}>
-             <span>Platform Fee (1.5%):</span>
-             <span>${platformFee.toFixed(2)}</span>
-          </div>
-          <div className={`${styles.summaryRow} ${styles.totalRow}`}>
-             <span>Total:</span>
-             <span>${totalWithFee.toFixed(2)} tUSDC</span>
-          </div>
 
-          {tradeAction === "buy" && Number(orderAmount) > 0 && (
-            <div className={`${styles.summaryRow} ${styles.profitRow}`}>
-               <span>Potential Payout:</span>
-               <span>+${expectedProfit.toFixed(2)} ({roi.toFixed(1)}% ROI)</span>
+          {/* Quick Percentage Fill Chips for Selling */}
+          {tradeAction === "sell" && heldPosition && heldPosition.side === orderSide && (
+            <div className={styles.quickPercentRow}>
+              <span className={styles.quickPercentLabel}>Quick Fill:</span>
+              {[25, 50, 75, 100].map((pct) => {
+                const targetVal = pct === 100 
+                  ? heldPosition.contracts 
+                  : Math.max(1, Math.floor(heldPosition.contracts * (pct / 100)));
+                const isActive = Number(orderAmount) === targetVal;
+                return (
+                  <button
+                    key={pct}
+                    type="button"
+                    className={`${styles.quickPercentBtn} ${isActive ? styles.quickPercentActive : ""}`}
+                    onClick={() => {
+                      setInputType("shares");
+                      setOrderAmount(targetVal);
+                    }}
+                  >
+                    {pct === 100 ? "100% (MAX)" : `${pct}%`}
+                  </button>
+                );
+              })}
             </div>
+          )}
+
+          {tradeAction === "buy" ? (
+            <>
+              <div className={styles.summaryRow}>
+                <span>Est. Shares:</span>
+                <span>{shares.toLocaleString()}</span>
+              </div>
+              <div className={`${styles.summaryRow} ${styles.totalRow}`}>
+                <span>Total Cost:</span>
+                <span>${cost.toFixed(2)} tUSDC</span>
+              </div>
+              {Number(orderAmount) > 0 && (
+                <div className={`${styles.summaryRow} ${styles.profitRow}`}>
+                  <span>Potential Payout:</span>
+                  <span>+${expectedProfit.toFixed(2)} ({roi.toFixed(1)}% ROI)</span>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div className={styles.summaryRow}>
+                <span>Contracts to Sell:</span>
+                <span>{shares.toLocaleString()}</span>
+              </div>
+              <div className={`${styles.summaryRow} ${styles.totalRow}`}>
+                <span>Payout to Wallet:</span>
+                <span className={styles.proceedsValue}>${netSellProceeds.toFixed(2)} tUSDC</span>
+              </div>
+              {estSellPnl !== null && (
+                <div className={styles.summaryRow} style={{ borderTop: "none", paddingTop: "4px" }}>
+                  <span>Estimated Realized P&L:</span>
+                  <span style={{ color: estSellPnl >= 0 ? "#10b981" : "#ef4444", fontWeight: 700 }}>
+                    {estSellPnl >= 0 ? "+" : ""}${estSellPnl.toFixed(2)} ({estSellPnl >= 0 ? "+" : ""}{estSellPnlPct?.toFixed(1)}%)
+                  </span>
+                </div>
+              )}
+            </>
           )}
         </div>
 
-        {/* Insufficient Balance Notice if needed */}
-        {connected && cost > 0 && collateralBalance < cost && (
+        {/* Buy: Insufficient collateral balance */}
+        {connected && tradeAction === "buy" && cost > 0 && collateralBalance < totalWithFee && (
           <div style={{ margin: "12px 0", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px" }}>
-            <span style={{ color: "#ef4444" }}>Insufficient balance</span>
+            <span style={{ color: "#ef4444" }}>Insufficient collateral balance</span>
             <button
               type="button"
               onClick={() => navigate("/portfolio")}
@@ -362,20 +540,32 @@ const TradePage: React.FC<TradePageProps> = ({
           </div>
         )}
 
+        {/* Sell: Exceeds held contracts warning */}
+        {connected && tradeAction === "sell" && heldPosition && heldPosition.side === orderSide && shares > heldPosition.contracts && (
+          <div style={{ margin: "12px 0", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px" }}>
+            <span style={{ color: "#ef4444" }}>
+              Exceeds held contracts ({heldPosition.contracts} available)
+            </span>
+          </div>
+        )}
+
         {/* Submit Trade Button */}
         <button
-          className={styles.tradeBtn}
+          className={`${styles.tradeBtn} ${tradeAction === "sell" ? styles.sellBtn : ""}`}
           onClick={handleTrade}
           disabled={
             !!orderStatus || 
             (connected && (!orderAmount || Number(orderAmount) <= 0)) ||
-            (connected && tradeAction === "buy" && collateralBalance < cost)
+            (connected && tradeAction === "buy" && collateralBalance < totalWithFee) ||
+            (connected && tradeAction === "sell" && !!heldPosition && heldPosition.side === orderSide && shares > heldPosition.contracts)
           }
         >
           {orderStatus || (
             !connected ? "Connect Wallet" : 
-            (tradeAction === "buy" && collateralBalance < cost) ? "Insufficient tUSDC Balance" :
-            `${tradeAction.toUpperCase()} ${orderSide === "yes" ? "UP" : "DOWN"}`
+            (tradeAction === "buy" && collateralBalance < totalWithFee) ? "Insufficient tUSDC Balance" :
+            (tradeAction === "sell" && !!heldPosition && heldPosition.side === orderSide && shares > heldPosition.contracts) ? `Max ${heldPosition.contracts} Contracts` :
+            tradeAction === "sell" ? `SELL ${shares || 0} ${orderSide === "yes" ? "UP" : "DOWN"} · Payout $${netSellProceeds.toFixed(2)}` :
+            `BUY ${orderSide === "yes" ? "UP" : "DOWN"} ($${totalWithFee.toFixed(2)})`
           )}
         </button>
 

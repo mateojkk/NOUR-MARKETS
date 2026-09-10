@@ -727,3 +727,147 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* Position Context Banner */
+.positionBanner {
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.positionBannerLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.positionSideTag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.4px;
+}
+
+.positionSideTag.up {
+  background: var(--yes-bg);
+  color: var(--yes-color);
+}
+
+.positionSideTag.down {
+  background: var(--no-bg);
+  color: var(--no-color);
+}
+
+.positionBannerInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.positionBannerTitle {
+  font-size: 12px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.positionBannerSub {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.positionBannerAction {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--primary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.positionBannerAction:hover {
+  background: var(--bg);
+  border-color: var(--primary);
+}
+
+/* Quick Fill Percentage Chips */
+.quickPercentRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+
+.quickPercentLabel {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-right: 2px;
+}
+
+.quickPercentBtn {
+  flex: 1;
+  padding: 4px 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+
+.quickPercentBtn:hover {
+  background: var(--bg-alt);
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.quickPercentBtn.quickPercentActive {
+  background: var(--primary);
+  color: var(--text-inverse);
+  border-color: var(--primary);
+}
+
+/* Proceeds Row */
+.proceedsRow {
+  padding-top: 10px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.proceedsValue {
+  color: var(--yes-color) !important;
+  font-weight: 700 !important;
+  font-family: var(--font-mono);
+}
+
+/* Sell Action Button */
+.sellBtn {
+  background: #ef4444 !important;
+  color: #ffffff !important;
+}
+
+.sellBtn:hover:not(:disabled) {
+  background: #dc2626 !important;
+}

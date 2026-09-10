@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import userHandler from '../api/user.ts'
 
 const ASSET_ICONS: Record<string, string> = {
   BTC: "/icons/btc.svg",
@@ -290,26 +291,21 @@ function localApiDevPlugin() {
           }));
         }
 
-        if (pathname.startsWith('/api/user/')) {
-          if (pathname.endsWith('/profile')) {
-            const parts = pathname.split('/');
-            const address = parts[3] || '0x0000000000000000000000000000000000000000';
-            res.statusCode = 200;
-            return res.end(JSON.stringify({
-              wallet_address: address,
-              display_name: `Trader ${address.slice(0, 6)}`,
-              username: address.slice(0, 8),
-              bio: "Somnia prediction market trader",
-              avatar_url: "",
-              is_beta_user: true,
-            }));
+        if (pathname.startsWith('/api/user')) {
+          let bodyStr = '';
+          for await (const chunk of req) {
+            bodyStr += chunk;
           }
-          if (pathname.endsWith('/trades')) {
-            res.statusCode = 200;
-            return res.end(JSON.stringify([]));
+          if (bodyStr) {
+            try {
+              req.body = JSON.parse(bodyStr);
+            } catch {
+              req.body = bodyStr;
+            }
           }
-          res.statusCode = 200;
-          return res.end(JSON.stringify({ status: "ok" }));
+          req.query = Object.fromEntries(url.searchParams.entries());
+          await userHandler(req, res);
+          return;
         }
 
         if (pathname === '/api/health') {

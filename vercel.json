@@ -5,6 +5,10 @@
   "framework": "vite",
   "rewrites": [
     {
+      "source": "/api/user/(.*)",
+      "destination": "/api/user?subpath=$1"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },

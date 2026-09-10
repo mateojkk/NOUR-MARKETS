@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useAccount, useDisconnect, useConnect } from "wagmi";
 import { Magic } from "magic-sdk";
-import { clearAuthToken, getAuthToken, setAuthToken } from "../services/auth";
+import { clearAuthToken, getAuthToken, setAuthToken, syncBackendSession, deleteBackendSession } from "../services/auth";
 import { getCollateralBalance, claimTestnetFaucet } from "../services/dreamdex";
 
 const MAGIC_KEY = import.meta.env.VITE_MAGIC_PUBLISHABLE_KEY?.trim();
@@ -48,7 +48,14 @@ export const EvmWalletProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const { connectAsync, connectors } = useConnect();
   
   const [internalConnecting, setInternalConnecting] = useState(false);
-  const [isRestoring, setIsRestoring] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return Boolean(
+      localStorage.getItem("nour_connected_wallet") ||
+      localStorage.getItem("nour_session_token") ||
+      localStorage.getItem("nour-auth-address")
+    );
+  });
   const [isAuthenticated, setIsAuthenticated] = useState(() => !!getAuthToken());
   const [collateralBalance, setCollateralBalance] = useState<number>(0);
   const [isStuck, setIsStuck] = useState(false);
@@ -105,15 +112,23 @@ export const EvmWalletProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   useEffect(() => {
     if (isConnected && address) {
+      const method = (localStorage.getItem("nour_connected_wallet") as "magic" | "injected") || "injected";
       setAuthToken(`auth-${address}`, address);
       setIsAuthenticated(true);
       refreshBalance();
-    } else {
-      clearAuthToken();
-      setIsAuthenticated(false);
-      setCollateralBalance(0);
+      syncBackendSession(address, method).catch(() => {});
+    } else if (!isRestoring && !internalConnecting && !isConnecting && !isReconnecting) {
+      const hasSavedSession = Boolean(
+        typeof window !== "undefined" &&
+        (localStorage.getItem("nour_connected_wallet") || localStorage.getItem("nour_session_token"))
+      );
+      if (!hasSavedSession) {
+        clearAuthToken();
+        setIsAuthenticated(false);
+        setCollateralBalance(0);
+      }
     }
-  }, [isConnected, address, refreshBalance]);
+  }, [isConnected, address, isRestoring, internalConnecting, isConnecting, isReconnecting, refreshBalance]);
 
   useEffect(() => {
     if (isConnecting || isReconnecting) {
@@ -128,14 +143,12 @@ export const EvmWalletProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // Magic's hidden login iframe can take a moment to boot on a cold page
   // load, so probes are RETRIED until the SDK gives a definitive answer.
   // A timeout/exception is "indeterminate — try again", NOT "logged out".
-  // Only a definitive `false` from the SDK marks the session as gone.
   useEffect(() => {
     let cancelled = false;
 
     const log = (...args: any[]) => console.info("[nour:restore]", ...args);
 
-    // Magic talks to its login iframe via postMessage; a blocked/slow iframe
-    // can hang an individual probe, so each probe is bounded.
+    // Bounded promise timeout to avoid hanging on slow network or blocked iframes
     const withTimeout = <T,>(p: Promise<T>, ms: number, label: string): Promise<T> =>
       Promise.race([
         p,
@@ -151,13 +164,14 @@ export const EvmWalletProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       connectors.find((c) => c.id === "magic" || c.name.toLowerCase().includes("magic"));
 
     const restoreInjected = async (): Promise<boolean> => {
-      for (const delay of [0, 600, 1500]) {
+      const delays = [0, 600, 1500];
+      for (let i = 0; i < delays.length; i++) {
         if (cancelled) return false;
-        if (delay) await sleep(delay);
+        if (delays[i]) await sleep(delays[i]);
         if (cancelled) return false;
         const eth = typeof window !== "undefined" ? (window as any).ethereum : null;
         const connector = findInjected();
-        if (!eth?.request || !connector) break;
+        if (!eth?.request || !connector) continue;
         try {
           // Silent read — never triggers a wallet popup
           const accounts: string[] = await withTimeout(
@@ -172,9 +186,7 @@ export const EvmWalletProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             log("restored session via browser wallet");
             return true;
           }
-          // Provider responded: no accounts → genuinely not connected
-          log("injected provider responded: no accounts");
-          return false;
+          log("injected probe attempt", i + 1, "found no active accounts, will retry if intervals remain");
         } catch (err: any) {
           log("injected probe indeterminate, will retry:", err?.message || err);
         }
@@ -189,13 +201,14 @@ export const EvmWalletProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
       const connector = findMagic();
       if (!connector) return false;
-      for (const delay of [0, 700, 1500]) {
+      const delays = [0, 800, 1600];
+      for (let i = 0; i < delays.length; i++) {
         if (cancelled) return false;
-        if (delay) await sleep(delay);
+        if (delays[i]) await sleep(delays[i]);
         if (cancelled) return false;
         try {
-          const loggedIn = await withTimeout(magic.user.isLoggedIn(), 3000, "magic.user.isLoggedIn");
-          log("magic session alive?", loggedIn);
+          const loggedIn = await withTimeout(magic.user.isLoggedIn(), 3500, "magic.user.isLoggedIn");
+          log("magic session alive?", loggedIn, `(attempt ${i + 1}/${delays.length})`);
           if (cancelled) return false;
           if (loggedIn) {
             await connectAsync({ connector });
@@ -203,9 +216,6 @@ export const EvmWalletProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             log("restored session via Magic email login");
             return true;
           }
-          // Definitive: Magic's SDK answered and the session is gone
-          localStorage.removeItem("nour_connected_wallet");
-          return false;
         } catch (err: any) {
           log("Magic probe indeterminate (iframe still booting?), will retry:", err?.message || err);
         }
@@ -222,6 +232,7 @@ export const EvmWalletProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
       if (!magicAvailable && !injectedAvailable) {
         log("no session providers available");
+        setIsRestoring(false);
         return;
       }
 
@@ -229,11 +240,12 @@ export const EvmWalletProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       try {
         if (saved === "injected" && (await restoreInjected())) return;
         if (saved === "magic" && (await restoreMagic())) return;
-        // Fallbacks: the flag can be missing (cleared/partitioned storage)
-        // even though a session is still alive — probe Magic, then injected.
+        // Fallbacks: probe Magic, then injected
         if (await restoreMagic()) return;
-        await restoreInjected();
-        log("no live session found — showing login page");
+        if (await restoreInjected()) return;
+        log("no live session found — clearing stale state");
+        localStorage.removeItem("nour_connected_wallet");
+        clearAuthToken();
       } finally {
         if (!cancelled) setIsRestoring(false);
       }
@@ -382,6 +394,7 @@ export const EvmWalletProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const disconnect = useCallback(async () => {
     localStorage.removeItem("nour_connected_wallet");
     localStorage.removeItem("nour-auth-address");
+    await deleteBackendSession().catch(() => {});
     try {
       localStorage.removeItem("wagmi.store");
       localStorage.removeItem("wagmi.recentConnectorId");

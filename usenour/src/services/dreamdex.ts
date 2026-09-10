@@ -1,4 +1,5 @@
 import { createPublicClient, http, parseAbi, parseUnits, formatUnits, type Address } from "viem";
+import { decodeRevert } from "./revertDecoder";
 import type { Market, MarketGroup } from "../types";
 
 // --- Somnia Shannon Testnet Constants ---
@@ -225,50 +226,113 @@ export async function placeDreamDexOrder({
   action = "buy",
   priceProb,
   contractsAmount,
-  orderType = "ioc",
+  orderType = "limit",
 }: PlaceOrderParams): Promise<{ txHash: string; orderId: string }> {
   const { ethers } = await import("ethers");
   const safePoolAddress = ethers.getAddress(poolAddress.toLowerCase());
+
+  // Prevent routing order to the module singleton if a pool address is missing
+  if (safePoolAddress.toLowerCase() === DREAMDEX_CONTRACTS.binaryMarketsModule.toLowerCase()) {
+    throw new Error("This market does not have an active binary trading pool on Somnia.");
+  }
+
   const provider = new ethers.BrowserProvider(walletProvider);
   const signer = await provider.getSigner();
   const userAddress = await signer.getAddress();
 
   // Pre-flight: ensure the market's pool contract actually exists on-chain.
-  // Demo/synthetic listings have fabricated pool addresses — sending an order
-  // to them would revert and burn gas. Direct users to 🟢 LIVE markets.
   const poolCode = await somniaClient.getCode({ address: safePoolAddress as Address });
   if (!poolCode || poolCode === "0x") {
     throw new Error(
       "This market's trading pool is not live on-chain (demo listing). Please trade a market marked 🟢 LIVE."
     );
   }
-  // 1. Approve Collateral to the POOL if needed.
-  // Per the DreamDEX SDK, order escrow pulls collateral msg.sender -> pool,
-  // so the approval must target the pool (approving the module does nothing here).
+
+  // 1. Calculate prices and costs
+  // The Somnia BinaryPool contract ALWAYS expects the YES-side probability / limit price
+  // regardless of whether buying or selling YES or NO (per Somnia SDK tradeAbi.js).
+  const clampedProb = Math.max(0.01, Math.min(0.99, priceProb));
+  const yesPriceProb = side === "yes" ? clampedProb : Math.max(0.01, Math.min(0.99, 1 - clampedProb));
+  const outcomePrice = side === "yes" ? yesPriceProb : 1 - yesPriceProb;
+
+  const rawPrice = snapPrice(yesPriceProb);
+  const rawQuantity = snapQuantity(contractsAmount);
+
+  // kind: 0 = BUY_YES, 1 = SELL_YES, 2 = BUY_NO, 3 = SELL_NO
+  const baseSide = side === "yes" ? 0 : 2;
+  const sideCode = action === "sell" ? baseSide + 1 : baseSide;
+
+  // orderType: 0 = LIMIT (NormalOrder, fills matching liquidity & rests remainder), 2 = IOC, 3 = PostOnly
+  const typeCode = orderType === "ioc" ? 2 : orderType === "post_only" ? 3 : 0;
+
+  // Collateral contract
   const collateralContract = new ethers.Contract(
     DREAMDEX_CONTRACTS.collateral,
     [
+      "function balanceOf(address owner) view returns (uint256)",
       "function allowance(address owner, address spender) view returns (uint256)",
       "function approve(address spender, uint256 amount) returns (bool)",
     ],
     signer
   );
 
-  const costEst = contractsAmount * (priceProb);
+  const costEst = contractsAmount * outcomePrice;
   const rawCost = parseUnits((costEst * 1.05).toFixed(6), DREAMDEX_CONTRACTS.collateralDecimals);
 
-  if (action === "sell") {
-    // SELL orders move outcome tokens (ERC6909) held by the user — the pool
-    // must be granted operator rights on the outcome-token singleton first
-    // (exactly like the SDK's ensureOperator(pool) escrow step).
-    const outcomeContract = new ethers.Contract(
-      DREAMDEX_CONTRACTS.outcomeToken6909,
-      [
-        "function isOperator(address owner, address spender) view returns (bool)",
-        "function setOperator(address spender, bool approved) returns (bool)",
-      ],
-      signer
-    );
+  // Outcome token singleton for SELL operations
+  const outcomeContract = new ethers.Contract(
+    DREAMDEX_CONTRACTS.outcomeToken6909,
+    [
+      "function balanceOf(address owner, uint256 id) view returns (uint256)",
+      "function isOperator(address owner, address spender) view returns (bool)",
+      "function setOperator(address spender, bool approved) returns (bool)",
+    ],
+    signer
+  );
+
+  // Pool contract with safe checksummed address
+  const poolContract = new ethers.Contract(
+    safePoolAddress,
+    [
+      "function placeBinaryOrder(uint8 kind, uint256 price, uint256 quantity, uint64 expireTimestampNs, uint8 orderType, uint8 selfMatchingOption, address builder, uint96 builderFeeBpsTimes1k, uint64 userData) payable returns (bool success, uint128 id)",
+      "function marketExpiryNs() view returns (uint64)",
+      "function getBinaryPoolParams() view returns (tuple(address collateralToken, address market, address outcomeToken, uint256 yesId, uint256 noId, uint256 oneCollateral, uint256 setBacking, address feeRecipient, uint256 makerFeeBpsTimes1k, uint256 takerFeeBpsTimes1k, uint256 maxBuilderFeeBpsTimes1k, uint256 settlementFeeBpsTimes1k, address settlement, uint64 marketNonce, bool finalized))",
+    ],
+    signer
+  );
+
+  if (action === "buy") {
+    // Pre-flight balance check: Ensure user has enough testnet collateral
+    try {
+      const balance: bigint = await collateralContract.balanceOf(userAddress);
+      if (balance < rawCost) {
+        const balFmt = parseFloat(formatUnits(balance, DREAMDEX_CONTRACTS.collateralDecimals)).toFixed(2);
+        const needFmt = parseFloat(formatUnits(rawCost, DREAMDEX_CONTRACTS.collateralDecimals)).toFixed(2);
+        throw new Error(
+          `Insufficient tUSDC balance (have $${balFmt}, need $${needFmt}). Claim free testnet collateral from the faucet in the top right.`
+        );
+      }
+    } catch (balErr: any) {
+      if (balErr?.message?.includes("Insufficient tUSDC")) throw balErr;
+    }
+
+    // Ensure allowance to the pool
+    const currentAllowance: bigint = await collateralContract.allowance(userAddress, safePoolAddress);
+    if (currentAllowance < rawCost) {
+      try {
+        const maxApprove = ethers.MaxUint256;
+        const approveTx = await collateralContract.approve(safePoolAddress, maxApprove);
+        await approveTx.wait();
+      } catch (err: any) {
+        if (err?.code === "ACTION_REJECTED" || err?.message?.includes("user rejected") || err?.message?.includes("User rejected")) {
+          throw new Error("Transaction rejected in wallet");
+        }
+        throw new Error("Collateral approval was not confirmed");
+      }
+    }
+  } else {
+    // action === "sell"
+    // Authorize pool as operator on the ERC6909 singleton
     try {
       const granted: boolean = await outcomeContract.isOperator(userAddress, safePoolAddress);
       if (!granted) {
@@ -276,74 +340,126 @@ export async function placeDreamDexOrder({
         await opTx.wait();
       }
     } catch (err: any) {
-      if (err?.code === "ACTION_REJECTED" || err?.message?.includes("user rejected")) {
+      if (err?.code === "ACTION_REJECTED" || err?.message?.includes("user rejected") || err?.message?.includes("User rejected")) {
         throw new Error("Transaction rejected in wallet");
       }
       throw new Error("Failed to authorize the pool to move your outcome tokens");
     }
-  }
 
-  const currentAllowance = await collateralContract.allowance(userAddress, safePoolAddress);
-  if (action === "buy" && currentAllowance < rawCost) {
+    // Pre-flight check: Check user's outcome token balance
     try {
-      const maxApprove = ethers.MaxUint256;
-      const approveTx = await collateralContract.approve(safePoolAddress, maxApprove);
-      await approveTx.wait();
-    } catch (err: any) {
-      if (err?.code === "ACTION_REJECTED" || err?.message?.includes("user rejected")) {
-        throw new Error("Transaction rejected in wallet");
+      const poolParams = await poolContract.getBinaryPoolParams();
+      const tokenId = side === "yes" ? poolParams.yesId : poolParams.noId;
+      const tokenBal: bigint = await outcomeContract.balanceOf(userAddress, tokenId);
+      if (tokenBal < rawQuantity) {
+        const balFmt = parseFloat(formatUnits(tokenBal, 6)).toFixed(2);
+        throw new Error(
+          `You only hold ${balFmt} on-chain ${side.toUpperCase()} contracts for this market. Cannot sell ${contractsAmount}.`
+        );
       }
-      throw new Error("Collateral approval was not confirmed");
+    } catch (chkErr: any) {
+      if (chkErr?.message?.includes("Cannot sell")) throw chkErr;
     }
   }
 
-  // 2. Encode parameters
-  // kind: 0 = BUY_YES (Up), 1 = SELL_YES, 2 = BUY_NO (Down), 3 = SELL_NO
-  const baseSide = side === "yes" ? 0 : 2;
-  const sideCode = action === "sell" ? baseSide + 1 : baseSide;
-  const rawPrice = snapPrice(priceProb);
-  const rawQuantity = snapQuantity(contractsAmount);
-  
-  // orderType: 2 = IOC (taker, must cross), 3 = PostOnly (maker), 0 = LIMIT
-  const typeCode = orderType === "ioc" ? 2 : orderType === "post_only" ? 3 : 0;
-
-  // Pool contract with safe checksummed address
-  const poolContract = new ethers.Contract(
-    safePoolAddress,
-    [
-      // Matches the DreamDEX binary pool ABI exactly (markets-sdk 0.29.0).
-      // A shorter/older 5-arg encoding hits an unknown selector and reverts.
-      "function placeBinaryOrder(uint8 kind, uint256 price, uint256 quantity, uint64 expireTimestampNs, uint8 orderType, uint8 selfMatchingOption, address builder, uint96 builderFeeBpsTimes1k, uint64 userData) payable returns (bool success, uint128 id)",
-      "function marketExpiryNs() view returns (uint64)",
-    ],
-    signer
-  );
-
-  // v2 order-expiry rule (per the SDK): every order must satisfy
-  // 0 < expireNs <= pool.marketExpiryNs — a fixed "now + 5 min" reverts with
-  // OrderExpiryBeyondMarket on windows with less time left. Default to the
-  // pool's own market expiry, exactly like the SDK does.
+  // Order expiry: 0 < expireNs <= pool.marketExpiryNs
   let expireNs: bigint;
   try {
     const poolExpiryNs: bigint = await poolContract.marketExpiryNs();
+    const nowNs = BigInt(Date.now()) * 1_000_000n;
+    if (poolExpiryNs <= nowNs) {
+      throw new Error("This market window has already closed and is awaiting settlement.");
+    }
     expireNs = poolExpiryNs;
-  } catch {
-    expireNs = getExpiryNanoseconds(900); // 15 min safety cap fallback
+  } catch (expErr: any) {
+    if (expErr?.message?.includes("closed")) throw expErr;
+    expireNs = getExpiryNanoseconds(900);
+  }
+
+  // Estimate gas with a generous safety margin for Somnia testnet
+  let gasLimit = 800000n;
+  try {
+    const estGas: bigint = await poolContract.placeBinaryOrder.estimateGas(
+      sideCode,
+      rawPrice,
+      rawQuantity,
+      expireNs,
+      typeCode,
+      0,
+      ethers.ZeroAddress,
+      0,
+      0
+    );
+    gasLimit = (estGas * 130n) / 100n;
+  } catch (estErr: any) {
+    // If estimation fails due to a custom contract revert, decode it immediately
+    const decoded = decodeRevert(estErr);
+    if (decoded?.errorName) {
+      switch (decoded.errorName) {
+        case "ImmediateOrCancelNoFill":
+          throw new Error("No immediate matching order found on the order book at this price. Try a Limit order.");
+        case "ERC20InsufficientAllowance":
+          throw new Error("Collateral allowance is insufficient for this order.");
+        case "ERC20InsufficientBalance":
+        case "InsufficientBalance":
+          throw new Error("Insufficient tUSDC balance on Somnia Shannon. Please claim faucet tokens to continue.");
+        case "InsufficientPermission":
+          throw new Error("Pool is not approved to transfer outcome tokens.");
+        case "OrderExpiryBeyondMarket":
+          throw new Error("Order expiry exceeds the market close time.");
+        case "OrderAlreadyExpired":
+          throw new Error("This market trading window has already closed.");
+        default:
+          throw new Error(`Somnia contract reverted: ${decoded.errorName}`);
+      }
+    }
+    gasLimit = 1000000n;
   }
 
   try {
-    const tx = await poolContract.placeBinaryOrder(sideCode, rawPrice, rawQuantity, expireNs, typeCode, 0, ethers.ZeroAddress, 0, 0);
+    const tx = await poolContract.placeBinaryOrder(
+      sideCode,
+      rawPrice,
+      rawQuantity,
+      expireNs,
+      typeCode,
+      0,
+      ethers.ZeroAddress,
+      0,
+      0,
+      { gasLimit }
+    );
     const receipt = await tx.wait();
     return {
       txHash: receipt.hash,
       orderId: `order-${receipt.hash}`,
     };
   } catch (err: any) {
-    // Surface the real on-chain reason — never fake success. The dashboard and
-    // explorer must reflect only transactions that actually landed.
-    if (err?.code === "ACTION_REJECTED" || err?.message?.includes("user rejected")) {
+    if (err?.code === "ACTION_REJECTED" || err?.message?.includes("user rejected") || err?.message?.includes("User rejected")) {
       throw new Error("Transaction rejected in wallet");
     }
+
+    const decoded = decodeRevert(err);
+    if (decoded?.errorName) {
+      switch (decoded.errorName) {
+        case "ImmediateOrCancelNoFill":
+          throw new Error("No immediate matching order found on the order book at this price. Try a Limit order.");
+        case "ERC20InsufficientAllowance":
+          throw new Error("Collateral allowance is insufficient for this order.");
+        case "ERC20InsufficientBalance":
+        case "InsufficientBalance":
+          throw new Error("Insufficient tUSDC balance on Somnia Shannon. Please claim faucet tokens to continue.");
+        case "InsufficientPermission":
+          throw new Error("Pool is not approved to transfer outcome tokens.");
+        case "OrderExpiryBeyondMarket":
+          throw new Error("Order expiry exceeds the market close time.");
+        case "OrderAlreadyExpired":
+          throw new Error("This market trading window has already closed.");
+        default:
+          throw new Error(`Somnia contract reverted: ${decoded.errorName}`);
+      }
+    }
+
     throw new Error(err?.reason || err?.shortMessage || err?.message || "Order failed on Somnia Shannon");
   }
 }

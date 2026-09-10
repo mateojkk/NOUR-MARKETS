@@ -328,7 +328,7 @@ function TradePageWrapper({
   const group: MarketGroup | undefined =
     location.state?.group ||
     groupedMarkets.find((g) =>
-      location.pathname.includes(encodeURIComponent(g.markets[0]?.ticker || "")) ||
+      g.markets.some((m) => location.pathname.includes(encodeURIComponent(m.ticker))) ||
       location.pathname.includes(encodeURIComponent(g.title))
     ) ||
     groupedMarkets[0];

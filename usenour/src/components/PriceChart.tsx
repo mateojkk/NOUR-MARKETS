@@ -146,8 +146,14 @@ const PriceChart: React.FC<PriceChartProps> = ({
 
   // Build stable ticker key for memoization
   const marketTickerKey = markets
-    .map((m) => `${m.ticker}:${m.tokenId || ""}`)
+    .map((m) => `${m.ticker}:${m.marketId || ""}`)
     .join(",");
+
+  // Keep refs for live prices so historical fetch doesn't re-trigger on price ticks
+  const latestMarketsRef = React.useRef(markets);
+  latestMarketsRef.current = markets;
+  const latestPriceRef = React.useRef(currentPrice);
+  latestPriceRef.current = currentPrice;
 
   // Build list of markets to fetch - STABLE based on tickers only
   const marketsToFetch = useMemo(() => {
@@ -182,7 +188,7 @@ const PriceChart: React.FC<PriceChartProps> = ({
       ];
     }
     return [];
-  }, [marketTickerKey, ticker, markets]);
+  }, [marketTickerKey, ticker]);
 
   const activeMarkets = useMemo(() => {
     const base = marketsToFetch.length > 0
@@ -207,18 +213,31 @@ const PriceChart: React.FC<PriceChartProps> = ({
     });
   }, [marketsToFetch, markets, currentPrice, ticker]);
 
-  // Fetch price history for all markets
+  // Fetch price history for all markets ONCE per market configuration
   useEffect(() => {
     if (marketsToFetch.length === 0) {
       setLoading(false);
       return;
     }
 
+    let isCancelled = false;
+
+    // Only show skeleton on first load if we don't have any data yet
+    setMarketData((prev) => {
+      const prevKeys = prev.map((p) => p.ticker).sort().join(",");
+      const nextKeys = marketsToFetch.map((m) => m.ticker).sort().join(",");
+      if (prevKeys !== nextKeys) {
+        setLoading(true);
+      }
+      return prev;
+    });
+
+    const currentMarkets = latestMarketsRef.current;
+    const currentBasePrice = latestPriceRef.current;
+
     // Fetch real candle history from the DreamDEX indexer
     const fetchSingleMarket = async (m: (typeof marketsToFetch)[0], targetPrice: number): Promise<MarketData> => {
       const clamped = Math.max(1, Math.min(99, targetPrice));
-      // Fallback when no candles exist yet: seed with the single real live
-      // price; the real-time effect appends points as prices update.
       const seedHistory: PricePoint[] = [
         {
           price_yes: clamped,
@@ -229,27 +248,27 @@ const PriceChart: React.FC<PriceChartProps> = ({
       ];
 
       try {
-        const res = await fetch(
-          `${API_BASE_URL}/api/timeseries?marketId=${encodeURIComponent(m.marketId || "")}`
-        );
-        if (res.ok) {
-          const data = await res.json();
-          if (data.history && data.history.length > 0) {
-            const history = data.history.map((point: any) => ({
-              price_yes: Number(((point.p || 0) * 100).toFixed(2)),
-              price_no: Number(((1 - (point.p || 0)) * 100).toFixed(2)),
-              volume: 0,
-              timestamp: (point.t || 0) * 1000,
-            }));
-            return { ...m, history, currentPrice: targetPrice };
+        if (m.marketId) {
+          const res = await fetch(
+            `${API_BASE_URL}/api/timeseries?marketId=${encodeURIComponent(m.marketId)}`
+          );
+          if (res.ok) {
+            const data = await res.json();
+            if (data.history && data.history.length > 0) {
+              const history = data.history.map((point: any) => ({
+                price_yes: Number(((point.p || 0) * 100).toFixed(2)),
+                price_no: Number(((1 - (point.p || 0)) * 100).toFixed(2)),
+                volume: 0,
+                timestamp: (point.t || 0) * 1000,
+              }));
+              return { ...m, history, currentPrice: targetPrice };
+            }
           }
         }
       } catch {}
 
       return { ...m, history: seedHistory, currentPrice: targetPrice };
     };
-
-    setLoading(true);
 
     const isBinary =
       marketsToFetch.length === 2 &&
@@ -261,10 +280,11 @@ const PriceChart: React.FC<PriceChartProps> = ({
     if (isBinary) {
       const mUp = marketsToFetch[0];
       const mDown = marketsToFetch[1];
-      const upPrice = markets.find((pm) => pm.ticker === mUp.ticker)?.currentPrice ?? currentPrice;
-      const downPrice = markets.find((pm) => pm.ticker === mDown.ticker)?.currentPrice ?? (100 - upPrice);
+      const upPrice = currentMarkets.find((pm) => pm.ticker === mUp.ticker)?.currentPrice ?? currentBasePrice;
+      const downPrice = currentMarkets.find((pm) => pm.ticker === mDown.ticker)?.currentPrice ?? (100 - upPrice);
 
       fetchSingleMarket(mUp, upPrice).then((upResult) => {
+        if (isCancelled) return;
         const downHistory: PricePoint[] = upResult.history.map((pt) => ({
           price_yes: Number((100 - pt.price_yes).toFixed(2)),
           price_no: Number(pt.price_yes.toFixed(2)),
@@ -282,25 +302,34 @@ const PriceChart: React.FC<PriceChartProps> = ({
         ]);
         setLoading(false);
       });
-      return;
+      return () => {
+        isCancelled = true;
+      };
     }
 
     Promise.all(
       marketsToFetch.map((m) => {
-        const livePrice = markets.find((pm) => pm.ticker === m.ticker)?.currentPrice ?? currentPrice;
+        const livePrice = currentMarkets.find((pm) => pm.ticker === m.ticker)?.currentPrice ?? currentBasePrice;
         return fetchSingleMarket(m, livePrice);
       })
     ).then((results) => {
+      if (isCancelled) return;
       setMarketData(results);
       setLoading(false);
     });
-  }, [marketsToFetch, markets, currentPrice]);
 
-  // Real-time: Append live price points when markets prop updates
+    return () => {
+      isCancelled = true;
+    };
+  }, [marketTickerKey, marketsToFetch]);
+
+  // Real-time: Append live price points when markets prop updates without reloading
   useEffect(() => {
-    if (loading || marketData.length === 0) return;
+    if (marketData.length === 0) return;
 
     setMarketData((prev) => {
+      if (prev.length === 0) return prev;
+
       const isBinaryPair =
         prev.length === 2 &&
         ((prev[0].name.toLowerCase().includes("up") &&
@@ -311,7 +340,8 @@ const PriceChart: React.FC<PriceChartProps> = ({
       const upLive = markets.find((p) => p.ticker === prev[0]?.ticker);
       const newUpPrice = upLive ? upLive.currentPrice : (prev[0]?.ticker === ticker ? currentPrice : null);
 
-      return prev.map((m, idx) => {
+      let hasChange = false;
+      const updated = prev.map((m, idx) => {
         let newPrice: number | null = null;
         if (isBinaryPair && idx === 1) {
           const downLive = markets.find((p) => p.ticker === m.ticker);
@@ -321,7 +351,8 @@ const PriceChart: React.FC<PriceChartProps> = ({
           newPrice = liveMarket ? liveMarket.currentPrice : (m.ticker === ticker ? currentPrice : null);
         }
 
-        if (newPrice !== null && newPrice !== m.currentPrice) {
+        if (newPrice !== null && Number.isFinite(newPrice) && newPrice !== m.currentPrice) {
+          hasChange = true;
           const newPoint: PricePoint = {
             price_yes: newPrice,
             price_no: 100 - newPrice,
@@ -339,8 +370,10 @@ const PriceChart: React.FC<PriceChartProps> = ({
         }
         return m;
       });
+
+      return hasChange ? updated : prev;
     });
-  }, [markets, currentPrice, ticker, loading]);
+  }, [markets, currentPrice, ticker]);
 
   // Format date labels
   const formatDateLabel = useCallback(
@@ -494,7 +527,7 @@ const PriceChart: React.FC<PriceChartProps> = ({
     setHoveredData(null);
   }, []);
 
-  if (loading) {
+  if (loading && marketData.length === 0) {
     return (
       <div className={styles.container}>
         <div className={styles.skeleton} />
