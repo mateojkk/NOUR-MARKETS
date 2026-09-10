@@ -139,12 +139,26 @@ function localApiDevPlugin() {
                   const asset = m.asset || "BTC";
                   const icon = resolveMarketIcon(asset, m.question || m.title);
                   const intervalSec = Number(m.intervalSec || 300);
-                  const intervalMins = Math.round(intervalSec / 60);
+                  let windowStr = `${intervalSec}s`;
+                  let tickerDuration = `${intervalSec}S`;
+                  if (intervalSec >= 86400) {
+                    const days = Math.round(intervalSec / 86400);
+                    windowStr = `${days}-Day`;
+                    tickerDuration = `${days}D`;
+                  } else if (intervalSec >= 3600) {
+                    const hours = Math.round(intervalSec / 3600);
+                    windowStr = `${hours}-Hour`;
+                    tickerDuration = `${hours}H`;
+                  } else if (intervalSec >= 60) {
+                    const mins = Math.round(intervalSec / 60);
+                    windowStr = `${mins}-Min`;
+                    tickerDuration = `${mins}M`;
+                  }
 
                   const q = (m.question || "").trim();
                   let cleanTitle = q;
                   if (!q || q.toLowerCase().includes("closes at or above its opening price")) {
-                    cleanTitle = `Will ${asset} close UP at end of ${intervalMins > 0 ? intervalMins + "-Min" : intervalSec + "s"} Window? (#${(m.marketId || m.id || "").slice(-4)})`;
+                    cleanTitle = `Will ${asset} close UP at end of ${windowStr} Window? (#${(m.marketId || m.id || "").slice(-4)})`;
                   } else {
                     cleanTitle = q.replace(/^Pricefeed test:\s*/i, "");
                     cleanTitle = cleanTitle.replace(/(?:at\s+)?(?:unix\s+time|timestamp|time)\s*:?\s*(\d{9,11})\??/gi, (_m: string, ts: string) => {
@@ -166,7 +180,7 @@ function localApiDevPlugin() {
                   }
 
                   return {
-                    ticker: `${asset}-${intervalMins > 0 ? intervalMins + "M" : intervalSec + "S"}-${(m.marketId || m.id || "").slice(-6)}`,
+                    ticker: `${asset}-${tickerDuration}-${(m.marketId || m.id || "").slice(-6)}`,
                     title: cleanTitle,
                     subtitle: isLive ? `🟢 LIVE · Closes in ${timeLeftStr}` : "🏁 Settled Market",
                     yes_sub_title: "Up (Yes)",

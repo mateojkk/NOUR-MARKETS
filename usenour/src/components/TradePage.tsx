@@ -125,7 +125,13 @@ const TradePage: React.FC<TradePageProps> = ({
   const estSellPnl = costBasis !== null ? netSellProceeds - costBasis : null;
   const estSellPnlPct = costBasis && costBasis > 0 ? (estSellPnl! / costBasis) * 100 : null;
 
+  const isMarketClosed = Boolean(activeMarket.closed) || (Boolean(activeMarket.expiry) && Date.now() / 1000 > (activeMarket.expiry || 0));
+
   const handleTrade = async () => {
+    if (isMarketClosed) {
+      onOrderComplete?.(false, "This market's trading window has closed.");
+      return;
+    }
     if (!connected || !walletProvider) {
       onOrderComplete?.(false, "Please connect your wallet first");
       return;
@@ -554,13 +560,15 @@ const TradePage: React.FC<TradePageProps> = ({
           className={`${styles.tradeBtn} ${tradeAction === "sell" ? styles.sellBtn : ""}`}
           onClick={handleTrade}
           disabled={
+            isMarketClosed ||
             !!orderStatus || 
             (connected && (!orderAmount || Number(orderAmount) <= 0)) ||
             (connected && tradeAction === "buy" && collateralBalance < totalWithFee) ||
             (connected && tradeAction === "sell" && !!heldPosition && heldPosition.side === orderSide && shares > heldPosition.contracts)
           }
         >
-          {orderStatus || (
+          {isMarketClosed ? "Trading Window Closed" :
+           orderStatus || (
             !connected ? "Connect Wallet" : 
             (tradeAction === "buy" && collateralBalance < totalWithFee) ? "Insufficient tUSDC Balance" :
             (tradeAction === "sell" && !!heldPosition && heldPosition.side === orderSide && shares > heldPosition.contracts) ? `Max ${heldPosition.contracts} Contracts` :
