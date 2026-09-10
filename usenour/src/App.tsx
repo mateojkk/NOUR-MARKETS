@@ -5,6 +5,7 @@ import { useEvmWallet } from "./contexts/EvmWalletContext";
 import LoginPage from "./components/LoginPage";
 import ProfilePage from "./components/ProfilePage";
 import Portfolio from "./components/Portfolio";
+import FaucetPage from "./components/FaucetPage";
 import Settings from "./components/Settings";
 import TopBar from "./components/TopBar";
 import nourLogo from "./assets/logo nour .png";
@@ -30,7 +31,9 @@ function App() {
   const location = useLocation();
   
   // Derive activeTab from URL path
-  const activeTab = location.pathname.startsWith("/portfolio") 
+  const activeTab = location.pathname.startsWith("/faucet")
+    ? "faucet"
+    : location.pathname.startsWith("/portfolio") 
     ? "portfolio" 
     : "markets";
     
@@ -64,12 +67,15 @@ function App() {
   useEffect(() => {
     localStorage.setItem("nour-theme", theme);
     const metaTheme = document.querySelector('meta[name="theme-color"]');
+    const metaColorScheme = document.querySelector('meta[name="color-scheme"]');
     if (theme === "dark") {
       document.documentElement.classList.add("dark");
       metaTheme?.setAttribute("content", "#1c1c1c");
+      metaColorScheme?.setAttribute("content", "only dark");
     } else {
       document.documentElement.classList.remove("dark");
       metaTheme?.setAttribute("content", "#efede3");
+      metaColorScheme?.setAttribute("content", "only light");
     }
   }, [theme]);
 
@@ -141,8 +147,9 @@ function App() {
     );
   };
 
-  const handleTabChange = (tab: "markets" | "portfolio" | "settings") => {
+  const handleTabChange = (tab: "markets" | "portfolio" | "faucet" | "settings") => {
     if (tab === "portfolio") navigate("/portfolio");
+    else if (tab === "faucet") navigate("/faucet");
     else if (tab === "settings") setShowSettings(true);
     else navigate("/");
   };
@@ -289,6 +296,7 @@ function App() {
             
             <Route path="/trade/:ticker" element={tradePageElement} />
             <Route path="/portfolio" element={<Portfolio />} />
+            <Route path="/faucet" element={<FaucetPage />} />
             <Route path="/profile/:username" element={<ProfilePage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

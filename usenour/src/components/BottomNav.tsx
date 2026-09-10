@@ -1,10 +1,10 @@
 import React from "react";
-import { Home, Briefcase, Search } from "lucide-react";
+import { Home, Briefcase, Search, Droplets } from "lucide-react";
 import "../styles/bottom-nav.css";
 
 interface BottomNavProps {
-  activeTab: "markets" | "portfolio" | "settings";
-  onTabChange: (tab: "markets" | "portfolio" | "settings") => void;
+  activeTab: "markets" | "portfolio" | "faucet" | "settings";
+  onTabChange: (tab: "markets" | "portfolio" | "faucet" | "settings") => void;
   onSearch: () => void;
 }
 
@@ -26,6 +26,14 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange, onSearch 
         <Briefcase size={20} />
         <span>Portfolio</span>
       </button>
+
+      <button
+        className={`bottom-nav-item ${activeTab === "faucet" ? "active" : ""}`}
+        onClick={() => onTabChange("faucet")}
+      >
+        <Droplets size={20} />
+        <span>Faucet</span>
+      </button>
       
       <button
         className="bottom-nav-item"
@@ -34,8 +42,6 @@ const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange, onSearch 
         <Search size={20} />
         <span>Search</span>
       </button>
-      
-
     </nav>
   );
 };

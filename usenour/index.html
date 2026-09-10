@@ -6,7 +6,7 @@
     <link rel="apple-touch-icon" href="./favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#1c1c1c" />
-    <meta name="color-scheme" content="dark light" />
+    <meta name="color-scheme" content="only dark" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="format-detection" content="telephone=no" />
@@ -16,10 +16,16 @@
       (function() {
         try {
           var saved = localStorage.getItem("nour-theme");
+          var metaCS = document.querySelector('meta[name="color-scheme"]');
+          var metaTC = document.querySelector('meta[name="theme-color"]');
           if (saved === "light") {
             document.documentElement.classList.remove("dark");
+            if (metaCS) metaCS.setAttribute("content", "only light");
+            if (metaTC) metaTC.setAttribute("content", "#efede3");
           } else {
             document.documentElement.classList.add("dark");
+            if (metaCS) metaCS.setAttribute("content", "only dark");
+            if (metaTC) metaTC.setAttribute("content", "#1c1c1c");
           }
         } catch (e) {
           document.documentElement.classList.add("dark");

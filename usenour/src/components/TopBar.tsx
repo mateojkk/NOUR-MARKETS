@@ -6,8 +6,8 @@ import nourLogo from "../assets/logo nour .png";
 import type { MarketGroup } from "../types";
 
 interface TopBarProps {
-  activeTab: "markets" | "portfolio" | "settings";
-  setActiveTab: (tab: "markets" | "portfolio" | "settings") => void;
+  activeTab: "markets" | "portfolio" | "faucet" | "settings";
+  setActiveTab: (tab: "markets" | "portfolio" | "faucet" | "settings") => void;
   searchTerm: string;
   setSearchTerm: (term: string) => void;
   wsConnected: boolean;
@@ -38,18 +38,16 @@ const TopBar: React.FC<TopBarProps> = ({
   // Show SearchPage as full-page overlay on mobile
   if (showSearchPage) {
     return (
-      <div className="search-page-overlay">
-        <SearchPage
-          searchTerm={searchTerm}
-          setSearchTerm={setSearchTerm}
-          onClose={() => setShowSearchPage(false)}
-          filteredGroups={filteredGroups}
-          onMarketClick={(group) => {
-            onMarketClick(group);
-            setShowSearchPage(false);
-          }}
-        />
-      </div>
+      <SearchPage
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        onClose={() => setShowSearchPage(false)}
+        filteredGroups={filteredGroups}
+        onMarketClick={(g) => {
+          setShowSearchPage(false);
+          onMarketClick(g);
+        }}
+      />
     );
   }
 
@@ -70,6 +68,12 @@ const TopBar: React.FC<TopBarProps> = ({
             onClick={() => setActiveTab("portfolio")}
           >
             Portfolio
+          </button>
+          <button
+            className={`category-tab ${activeTab === "faucet" ? "active" : ""}`}
+            onClick={() => setActiveTab("faucet")}
+          >
+            Faucet
           </button>
         </nav>
 

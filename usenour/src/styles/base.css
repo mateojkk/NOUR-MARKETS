@@ -54,12 +54,12 @@ html {
 
 html.dark {
   background-color: #1c1c1c !important;
-  color-scheme: dark !important;
+  color-scheme: only dark !important;
 }
 
 html:not(.dark) {
-  background-color: #efede3;
-  color-scheme: light;
+  background-color: #efede3 !important;
+  color-scheme: only light !important;
 }
 
 body {

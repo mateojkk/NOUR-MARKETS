@@ -85,7 +85,7 @@ function localApiDevPlugin() {
             const timeoutId = setTimeout(() => controller.abort(), 4000);
 
             const gqlQuery = `query {
-              Market(where: { marketType: { _eq: "BINARY" }, clobStatus: { _eq: "Trading" } }, limit: 500, order_by: { expiry: asc }) {
+              Market(where: { marketType: { _eq: "BINARY" }, clobStatus: { _in: ["Trading", "Finalized"] } }, limit: 500, order_by: { expiry: asc }) {
                 id
                 marketId
                 poolAddress

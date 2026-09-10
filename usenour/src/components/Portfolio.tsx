@@ -1,11 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Wallet,
   BarChart3,
   RefreshCw,
   Trophy,
-  Droplets,
   Check,
   ExternalLink,
   Copy,
@@ -27,7 +26,6 @@ import { useMarketData } from "../hooks/useMarketData";
 import { formatMarketTitle, resolveMarketIcon } from "../types";
 import TradeHistory from "./TradeHistory";
 import RankBadge from "./RankBadge";
-import WalletActions from "./WalletActions";
 import "./Portfolio.css";
 
 interface PortfolioPosition {
@@ -48,18 +46,33 @@ type TabType = "positions" | "history" | "stats";
 
 export default function Portfolio() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     address,
     connected,
     collateralBalance,
     refreshBalance,
     walletProvider,
-    claimFaucet,
   } = useEvmWallet();
   const walletAddress = address || null;
 
   const { markets } = useMarketData();
-  const [activeTab, setActiveTab] = useState<TabType>("positions");
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    const t = searchParams.get("tab");
+    return t === "history" || t === "stats" ? t : "positions";
+  });
+
+  useEffect(() => {
+    const t = searchParams.get("tab");
+    if (t === "positions" || t === "history" || t === "stats") {
+      setActiveTab(t);
+    }
+  }, [searchParams]);
+
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab);
+    setSearchParams({ tab });
+  };
   const [positions, setPositions] = useState<PortfolioPosition[]>([]);
   const [totalPnl, setTotalPnl] = useState(0);
   const [totalValue, setTotalValue] = useState(0);
@@ -73,11 +86,6 @@ export default function Portfolio() {
   const [closingStatus, setClosingStatus] = useState<string | null>(null);
   const [closeError, setCloseError] = useState<string | null>(null);
   const [closeSuccess, setCloseSuccess] = useState<string | null>(null);
-
-  // Faucet state
-  const [claimingFaucet, setClaimingFaucet] = useState(false);
-  const [faucetSuccess, setFaucetSuccess] = useState(false);
-  const [faucetError, setFaucetError] = useState<string | null>(null);
   const [copiedAddress, setCopiedAddress] = useState(false);
 
   const fetchPortfolio = useCallback(async () => {
@@ -94,7 +102,20 @@ export default function Portfolio() {
         : [];
 
       const mappedPositions: PortfolioPosition[] = backendPositions.map((p: PositionRecord) => {
-        const market = markets.find((m) => m.ticker === p.ticker);
+        // Robust market resolution:
+        // 1. Exact ticker match
+        // 2. Ticker suffix match (last segment of ticker is the on-chain hex ID)
+        // 3. Title match
+        const pSuffix = p.ticker?.split("-").pop()?.toLowerCase();
+        const market = markets.find((m) => {
+          if (m.ticker === p.ticker) return true;
+          const mSuffix = m.ticker?.split("-").pop()?.toLowerCase();
+          if (pSuffix && mSuffix && pSuffix === mSuffix) return true;
+          if (pSuffix && m.marketId && m.marketId.toLowerCase().endsWith(pSuffix)) return true;
+          if (p.title && m.title && p.title.trim().toLowerCase() === m.title.trim().toLowerCase()) return true;
+          return false;
+        });
+
         const avgPrice = p.avg_price || 50;
         const currentPrice = market
           ? (p.side === "yes" ? market.price_yes : market.price_no)
@@ -103,9 +124,10 @@ export default function Portfolio() {
         const pnl = ((currentPrice - avgPrice) * contracts) / 100;
         const pnlPercent = avgPrice > 0 ? ((currentPrice - avgPrice) / avgPrice) * 100 : 0;
         const poolAddress = market?.poolAddress || DREAMDEX_CONTRACTS.binaryMarketsModule;
+        // If market is missing from live feed or marked closed/expired, it is settled
         const isSettled = market
           ? Boolean(market.closed) || (Boolean(market.expiry) && Date.now() / 1000 > (market.expiry || 0))
-          : false;
+          : true;
 
         return {
           ticker: p.ticker,
@@ -149,22 +171,6 @@ export default function Portfolio() {
     }
   }, [connected, walletAddress, fetchPortfolio]);
 
-  const handleClaimFaucet = async () => {
-    setClaimingFaucet(true);
-    setFaucetError(null);
-    setFaucetSuccess(false);
-    try {
-      await claimFaucet();
-      setFaucetSuccess(true);
-      await fetchPortfolio();
-      setTimeout(() => setFaucetSuccess(false), 6000);
-    } catch (err: any) {
-      setFaucetError(err?.reason || err?.message || "Failed to claim faucet");
-    } finally {
-      setClaimingFaucet(false);
-    }
-  };
-
   const handleCopyAddress = async () => {
     if (!walletAddress) return;
     try {
@@ -193,12 +199,18 @@ export default function Portfolio() {
     setCloseError(null);
     setCloseSuccess(null);
 
-      const pool = positionToClose.poolAddress;
-      if (!pool || pool.toLowerCase() === DREAMDEX_CONTRACTS.binaryMarketsModule.toLowerCase()) {
-        setClosingStatus(null);
-        setCloseError("This position's market does not have an active binary pool address on Somnia.");
-        return;
-      }
+    if (positionToClose.isSettled) {
+      setClosingStatus(null);
+      setCloseError("This market window has already ended and settled. Please click 'Claim Payout' to redeem.");
+      return;
+    }
+
+    const pool = positionToClose.poolAddress;
+    if (!pool || pool.toLowerCase() === DREAMDEX_CONTRACTS.binaryMarketsModule.toLowerCase()) {
+      setClosingStatus(null);
+      setCloseError("This position's market does not have an active binary pool address on Somnia.");
+      return;
+    }
       const priceProb = positionToClose.currentPrice / 100;
 
     try {
@@ -370,74 +382,11 @@ export default function Portfolio() {
         </div>
       </div>
 
-      {/* Featured Testnet Faucet Section */}
-      <div className="portfolio-faucet-card">
-        <div className="faucet-card-left">
-          <div className="faucet-icon-badge">
-            <Droplets size={22} />
-          </div>
-          <div className="faucet-info">
-            <div className="faucet-title-row">
-              <h3>Testnet Collateral Faucet</h3>
-            </div>
-            <p className="faucet-desc">
-              Claim <strong>1,000 free tUSDC</strong> collateral to trade prediction markets.
-            </p>
-          </div>
-        </div>
-
-        <div className="faucet-card-right">
-          <button
-            className="faucet-claim-btn"
-            onClick={handleClaimFaucet}
-            disabled={claimingFaucet}
-          >
-            <Droplets size={16} />
-            <span>
-              {claimingFaucet ? "Minting tUSDC..." : faucetSuccess ? "Claimed 1,000 tUSDC!" : "Claim 1,000 Free tUSDC"}
-            </span>
-          </button>
-          <a
-            href="https://cloud.google.com/application/web3/faucet/somnia/shannon"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="faucet-gas-link"
-          >
-            <span>Need native STT gas? Faucet</span>
-            <ExternalLink size={12} />
-          </a>
-        </div>
-      </div>
-
-      {/* Faucet Feedback Banners */}
-      {faucetError && (
-        <div className="portfolio-banner error">
-          <span>{faucetError}</span>
-        </div>
-      )}
-      {faucetSuccess && (
-        <div className="portfolio-banner success">
-          <Check size={16} />
-          <span>Successfully claimed 1,000 tUSDC! Your balance has been updated.</span>
-        </div>
-      )}
-
-      {/* Quick Wallet Actions (Deposit / Withdraw Modals) */}
-      {walletAddress && (
-        <div className="portfolio-actions-section">
-          <WalletActions
-            walletAddress={walletAddress}
-            usdcBalance={collateralBalance}
-            onTransactionComplete={fetchPortfolio}
-          />
-        </div>
-      )}
-
       {/* Navigation Tabs */}
       <div className="portfolio-tabs">
         <button
           className={`tab-btn ${activeTab === "positions" ? "active" : ""}`}
-          onClick={() => setActiveTab("positions")}
+          onClick={() => handleTabChange("positions")}
         >
           <Layers size={15} />
           <span>Open Positions ({positions.length})</span>
@@ -445,7 +394,7 @@ export default function Portfolio() {
 
         <button
           className={`tab-btn ${activeTab === "history" ? "active" : ""}`}
-          onClick={() => setActiveTab("history")}
+          onClick={() => handleTabChange("history")}
         >
           <History size={15} />
           <span>Trade History</span>
@@ -453,7 +402,7 @@ export default function Portfolio() {
 
         <button
           className={`tab-btn ${activeTab === "stats" ? "active" : ""}`}
-          onClick={() => setActiveTab("stats")}
+          onClick={() => handleTabChange("stats")}
         >
           <Activity size={15} />
           <span>Performance & Stats</span>
@@ -522,18 +471,21 @@ export default function Portfolio() {
                     </div>
 
                     <div className="position-footer-actions">
-                      <button
-                        className="position-action-btn close-btn"
-                        onClick={() => handleOpenCloseModal(position)}
-                      >
-                        <XCircle size={14} />
-                        <span>Close Position</span>
-                      </button>
-                      <button className="position-action-btn primary" onClick={() => handleTradeMore(position)}>
-                        <span>Trade More</span>
-                        <ArrowUpRight size={14} />
-                      </button>
-                      {position.isSettled && (
+                      {!position.isSettled ? (
+                        <>
+                          <button
+                            className="position-action-btn close-btn"
+                            onClick={() => handleOpenCloseModal(position)}
+                          >
+                            <XCircle size={14} />
+                            <span>Close Position</span>
+                          </button>
+                          <button className="position-action-btn primary" onClick={() => handleTradeMore(position)}>
+                            <span>Trade More</span>
+                            <ArrowUpRight size={14} />
+                          </button>
+                        </>
+                      ) : (
                         <button
                           className="position-action-btn redeem"
                           onClick={() => handleRedeem(position)}

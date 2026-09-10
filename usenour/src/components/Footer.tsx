@@ -12,20 +12,6 @@ const Footer: React.FC = () => {
           </p>
         </div>
         
-        <div className="footer-links">
-          <div className="footer-link-group">
-            <h4>Platform</h4>
-            <a href="/">Markets</a>
-            <a href="/portfolio">Portfolio</a>
-          </div>
-          
-          <div className="footer-link-group">
-            <h4>Social</h4>
-            <a href="https://x.com/trynour" target="_blank" rel="noopener noreferrer">Twitter / X</a>
-            <a href="https://t.me/nourterminal" target="_blank" rel="noopener noreferrer">Telegram</a>
-            <a href="https://docs.nour.sh" target="_blank" rel="noopener noreferrer">Documentation</a>
-          </div>
-        </div>
       </div>
       
       <div className="footer-bottom">
