@@ -82,10 +82,25 @@ function localApiDevPlugin() {
           let onchainMarkets: any[] = [];
           try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 4000);
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
 
             const gqlQuery = `query {
-              Market(where: { marketType: { _eq: "BINARY" }, clobStatus: { _in: ["Trading", "Finalized"] } }, limit: 500, order_by: { expiry: asc }) {
+              trading: Market(where: { marketType: { _eq: "BINARY" }, clobStatus: { _eq: "Trading" } }, limit: 200, order_by: { expiry: asc }) {
+                id
+                marketId
+                poolAddress
+                marketAddress
+                asset
+                question
+                clobStatus
+                lastPrice
+                expiry
+                intervalSec
+                cumulativeQuoteVolume
+                yesTokenId
+                noTokenId
+              }
+              finalized: Market(where: { marketType: { _eq: "BINARY" }, clobStatus: { _eq: "Finalized" } }, limit: 100, order_by: { expiry: desc }) {
                 id
                 marketId
                 poolAddress
@@ -112,7 +127,9 @@ function localApiDevPlugin() {
 
             if (resp.ok) {
               const json: any = await resp.json().catch(() => null);
-              const rawList = json?.data?.Market;
+              const tradingList = Array.isArray(json?.data?.trading) ? json.data.trading : [];
+              const finalizedList = Array.isArray(json?.data?.finalized) ? json.data.finalized : [];
+              const rawList = [...tradingList, ...finalizedList];
 
               if (Array.isArray(rawList) && rawList.length > 0) {
                 onchainMarkets = rawList.map((m: any) => {
