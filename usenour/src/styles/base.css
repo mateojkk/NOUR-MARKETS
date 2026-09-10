@@ -44,30 +44,45 @@ button {
   border: none;
 }
 
-/* Force our color scheme over Tailwind defaults */
+/* Force our color scheme over Tailwind defaults and prevent iOS theme inversion */
 html {
-  background: var(--bg);
+  background-color: var(--bg);
+  color-scheme: dark light;
+  -webkit-tap-highlight-color: transparent;
+  scroll-behavior: smooth;
 }
 
 html.dark {
-  background: #1c1c1c;
-  color-scheme: dark;
+  background-color: #1c1c1c !important;
+  color-scheme: dark !important;
+}
+
+html:not(.dark) {
+  background-color: #efede3;
+  color-scheme: light;
 }
 
 body {
   font-family: var(--font-sans);
   font-weight: 400;
-  background: var(--bg);
+  background-color: var(--bg);
   color: var(--text);
   min-height: 100vh;
+  min-height: -webkit-fill-available;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
   text-rendering: optimizeLegibility;
   text-shadow: none;
 }
 
-html {
-  scroll-behavior: smooth;
+/* Prevent iOS Safari from forcing native light styles or white backgrounds on inputs */
+input,
+select,
+textarea {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
 }
 
 /* Custom scrollbar */

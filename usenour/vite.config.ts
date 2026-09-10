@@ -132,9 +132,20 @@ function localApiDevPlugin() {
                     : 0;
 
                   const secondsLeft = Math.max(0, Number(m.expiry || 0) - now);
-                  const mins = Math.floor(secondsLeft / 60);
-                  const secs = secondsLeft % 60;
-                  const timeLeftStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+                  let timeLeftStr = `${secondsLeft}s`;
+                  if (secondsLeft >= 86400) {
+                    const days = Math.floor(secondsLeft / 86400);
+                    const remHours = Math.floor((secondsLeft % 86400) / 3600);
+                    timeLeftStr = remHours > 0 ? `${days}d ${remHours}h` : `${days}d`;
+                  } else if (secondsLeft >= 3600) {
+                    const hours = Math.floor(secondsLeft / 3600);
+                    const remMins = Math.floor((secondsLeft % 3600) / 60);
+                    timeLeftStr = remMins > 0 ? `${hours}h ${remMins}m` : `${hours}h`;
+                  } else if (secondsLeft >= 60) {
+                    const mins = Math.floor(secondsLeft / 60);
+                    const secs = secondsLeft % 60;
+                    timeLeftStr = `${mins}m ${secs}s`;
+                  }
 
                   const asset = m.asset || "BTC";
                   const icon = resolveMarketIcon(asset, m.question || m.title);
@@ -158,7 +169,7 @@ function localApiDevPlugin() {
                   const q = (m.question || "").trim();
                   let cleanTitle = q;
                   if (!q || q.toLowerCase().includes("closes at or above its opening price")) {
-                    cleanTitle = `Will ${asset} close UP at end of ${windowStr} Window? (#${(m.marketId || m.id || "").slice(-4)})`;
+                    cleanTitle = `Will ${asset} close UP at end of ${windowStr} Window?`;
                   } else {
                     cleanTitle = q.replace(/^Pricefeed test:\s*/i, "");
                     cleanTitle = cleanTitle.replace(/(?:at\s+)?(?:unix\s+time|timestamp|time)\s*:?\s*(\d{9,11})\??/gi, (_m: string, ts: string) => {
@@ -175,6 +186,7 @@ function localApiDevPlugin() {
                       const n = Number(p);
                       return "at or above " + (n >= 1 ? "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "$" + p);
                     });
+                    cleanTitle = cleanTitle.replace(/\s*\(#[a-f0-9]+\)/gi, "");
                     cleanTitle = cleanTitle.replace(/\?\?+$/, "?");
                     cleanTitle = cleanTitle.charAt(0).toUpperCase() + cleanTitle.slice(1);
                   }

@@ -63,8 +63,14 @@ function App() {
 
   useEffect(() => {
     localStorage.setItem("nour-theme", theme);
-    if (theme === "dark") document.documentElement.classList.add("dark");
-    else document.documentElement.classList.remove("dark");
+    const metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (theme === "dark") {
+      document.documentElement.classList.add("dark");
+      metaTheme?.setAttribute("content", "#1c1c1c");
+    } else {
+      document.documentElement.classList.remove("dark");
+      metaTheme?.setAttribute("content", "#efede3");
+    }
   }, [theme]);
 
   useEffect(() => {

@@ -117,6 +117,7 @@ export function formatMarketTitle(title: string): string {
     return "at or above " + (n >= 1 ? "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "$" + p);
   });
 
+  str = str.replace(/\s*\(#[a-f0-9]+\)/gi, "");
   str = str.replace(/\?\?+$/, "?");
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
