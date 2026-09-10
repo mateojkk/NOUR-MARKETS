@@ -44,12 +44,15 @@ button {
   border: none;
 }
 
-/* Force our color scheme over Tailwind defaults and prevent iOS theme inversion */
+/* Force our color scheme over Tailwind defaults and prevent iOS/Brave theme inversion */
 html {
   background-color: var(--bg);
   color-scheme: dark light;
   -webkit-tap-highlight-color: transparent;
   scroll-behavior: smooth;
+  filter: none !important;
+  -webkit-filter: none !important;
+  forced-color-adjust: none !important;
 }
 
 html.dark {
@@ -60,6 +63,17 @@ html.dark {
 html:not(.dark) {
   background-color: #efede3 !important;
   color-scheme: only light !important;
+}
+
+/* When OS prefers dark but user chose light theme, force light colors */
+@media (prefers-color-scheme: dark) {
+  html:not(.dark),
+  html:not(.dark) body {
+    color-scheme: only light !important;
+    background-color: #efede3 !important;
+    filter: none !important;
+    -webkit-filter: none !important;
+  }
 }
 
 body {

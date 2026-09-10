@@ -7,11 +7,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#1c1c1c" />
     <meta name="color-scheme" content="only dark" />
+    <meta name="supported-color-schemes" content="only light only dark" />
+    <meta name="darkreader-lock" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="format-detection" content="telephone=no" />
     <meta name="description" content="Trade prediction markets with AI insights. Simple, fast, and secure." />
     <title>nourmarket</title>
+    <style>
+      /* Block Brave / browser-level dark mode filter inversion */
+      html, body, #root {
+        filter: none !important;
+        -webkit-filter: none !important;
+        forced-color-adjust: none !important;
+        -ms-high-contrast-adjust: none !important;
+      }
+      @media (prefers-color-scheme: dark) {
+        html:not(.dark) {
+          color-scheme: only light !important;
+          background-color: #efede3 !important;
+        }
+      }
+    </style>
     <script>
       (function() {
         try {
