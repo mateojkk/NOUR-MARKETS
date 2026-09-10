@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run build --prefix usenour",
   "outputDirectory": "usenour/dist",
-  "framework": "vite",
+  "framework": null,
   "rewrites": [
     {
       "source": "/api/user/(.*)",
