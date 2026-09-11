@@ -1,5 +1,5 @@
 import { useEvmWallet } from "../contexts/EvmWalletContext";
-import { useState, useRef, type FC } from "react";
+import { useState, useEffect, useRef, type FC } from "react";
 import { 
   User, 
   LogOut, 
@@ -22,12 +22,13 @@ type SettingsView = "main" | "profile";
 
 const Settings: FC<SettingsProps> = ({ onClose }) => {
   const { connected, disconnect } = useEvmWallet();
-  const { profile, walletAddress, updateDisplayName, updateUsername, updateBio, updateAvatar, clearProfile } = useProfile();
+  const { profile, walletAddress, updateProfile, updateAvatar, clearProfile } = useProfile();
   
   // View State
   const [currentView, setCurrentView] = useState<SettingsView>("main");
   const [slideDirection, setSlideDirection] = useState<"left" | "right">("right");
   const [copied, setCopied] = useState(false);
+  const [saving, setSaving] = useState(false);
   
   // Profile Edit State
   const [editName, setEditName] = useState(profile.displayName || "");
@@ -35,11 +36,23 @@ const Settings: FC<SettingsProps> = ({ onClose }) => {
   const [editBio, setEditBio] = useState(profile.bio || "");
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // Sync state whenever profile finishes loading from Supabase
+  useEffect(() => {
+    setEditName(profile.displayName || "");
+    setEditUsername(profile.username ? profile.username.replace('@nour.app', '') : "");
+    setEditBio(profile.bio || "");
+  }, [profile.displayName, profile.username, profile.bio]);
+
   // Derived data
   const displayName = profile.displayName || (walletAddress ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : 'User');
   const displayUsername = profile.username || (walletAddress ? `@${walletAddress.slice(0, 8)}.nour.app` : '');
 
   const navigateTo = (view: SettingsView) => {
+    if (view === "profile") {
+      setEditName(profile.displayName || "");
+      setEditUsername(profile.username ? profile.username.replace('@nour.app', '') : "");
+      setEditBio(profile.bio || "");
+    }
     setSlideDirection("right");
     setCurrentView(view);
   };
@@ -77,17 +90,24 @@ const Settings: FC<SettingsProps> = ({ onClose }) => {
     }
   };
 
-  const handleSaveProfile = () => {
-    if (editName.trim()) updateDisplayName(editName.trim());
-    
-    let finalUsername = editUsername.trim().toLowerCase();
-    if (finalUsername && !finalUsername.endsWith('@nour.app')) {
-      finalUsername = `${finalUsername}@nour.app`;
+  const handleSaveProfile = async () => {
+    setSaving(true);
+    try {
+      let finalUsername = editUsername.trim().toLowerCase();
+      if (finalUsername && !finalUsername.endsWith('@nour.app')) {
+        finalUsername = `${finalUsername}@nour.app`;
+      }
+      await updateProfile({
+        displayName: editName.trim(),
+        username: finalUsername,
+        bio: editBio.trim(),
+      });
+      navigateBack();
+    } catch (err) {
+      console.error("Failed to save profile:", err);
+    } finally {
+      setSaving(false);
     }
-    updateUsername(finalUsername);
-    
-    updateBio(editBio.trim());
-    navigateBack();
   };
 
   const handleDisconnect = () => {
@@ -241,8 +261,8 @@ const Settings: FC<SettingsProps> = ({ onClose }) => {
           />
         </div>
 
-        <button className="save-btn" onClick={handleSaveProfile}>
-          Save Changes
+        <button className="save-btn" onClick={handleSaveProfile} disabled={saving}>
+          {saving ? "Saving..." : "Save Changes"}
         </button>
       </div>
     </>

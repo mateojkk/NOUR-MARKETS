@@ -106,12 +106,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (endpoint === "profile") {
         if (req.method === "PUT") {
           const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
-          const updated = await updateProfile(address, {
-            display_name: body.display_name,
-            username: body.username,
-            bio: body.bio,
-            avatar_url: body.avatar_url,
-          });
+          const updates: Record<string, any> = {};
+          if (body.display_name !== undefined) updates.display_name = body.display_name;
+          if (body.username !== undefined) updates.username = body.username;
+          if (body.bio !== undefined) updates.bio = body.bio;
+          if (body.avatar_url !== undefined) updates.avatar_url = body.avatar_url;
+          const updated = await updateProfile(address, updates);
           return res.status(200).json(updated);
         }
         const profile = await getProfile(address);

@@ -40,7 +40,11 @@ tryLoadEnv();
 // =============================================================================
 
 export function getSupabaseUrl(): string {
-  return process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+  return (
+    process.env.SUPABASE_URL ||
+    process.env.VITE_SUPABASE_URL ||
+    "https://hlptdpjopyswucsvtere.supabase.co"
+  );
 }
 
 export function getSupabaseKey(): string {
@@ -48,7 +52,7 @@ export function getSupabaseKey(): string {
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     process.env.SUPABASE_ANON_KEY ||
     process.env.VITE_SUPABASE_ANON_KEY ||
-    ""
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhscHRkcGpvcHlzd3Vjc3Z0ZXJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNTc5ODcsImV4cCI6MjEwNDYzMzk4N30.AaPbl_2_vViDio5ahWHUXf6zJD2lu_xwBVArg8qd0yE"
   );
 }
 
@@ -228,10 +232,13 @@ export async function updateProfile(
   const address = normalizeAddress(rawAddress);
   const client = getSupabase();
 
-  const payload: Partial<UserRow> = {
-    ...updates,
-    updated_at: new Date().toISOString(),
-  };
+  const cleanUpdates: Record<string, any> = {};
+  for (const [key, value] of Object.entries(updates)) {
+    if (value !== undefined) {
+      cleanUpdates[key] = value;
+    }
+  }
+  cleanUpdates.updated_at = new Date().toISOString();
 
   if (client) {
     // Ensure row exists first
@@ -239,7 +246,7 @@ export async function updateProfile(
 
     const { data, error } = await client
       .from("users")
-      .update(payload)
+      .update(cleanUpdates)
       .eq("wallet_address", address)
       .select()
       .maybeSingle();
