@@ -146,6 +146,8 @@ export default function Portfolio() {
   const [positions, setPositions] = useState<PortfolioPosition[]>([]);
   const openPositions = useMemo(() => positions.filter((p) => !p.isSettled), [positions]);
   const closedPositions = useMemo(() => positions.filter((p) => p.isSettled), [positions]);
+  const claimablePositions = useMemo(() => closedPositions.filter((p) => p.settlementStatus === "won"), [closedPositions]);
+  const totalClaimable = useMemo(() => claimablePositions.reduce((sum, p) => sum + p.contracts, 0), [claimablePositions]);
   const [totalPnl, setTotalPnl] = useState(0);
   const [totalValue, setTotalValue] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -488,6 +490,13 @@ export default function Portfolio() {
     }
   };
 
+  const handleClaimAll = async () => {
+    if (!walletProvider || claimablePositions.length === 0) return;
+    for (const pos of claimablePositions) {
+      await handleRedeem(pos);
+    }
+  };
+
   if (!connected) {
     return (
       <div className="portfolio-container">
@@ -591,6 +600,33 @@ export default function Portfolio() {
         </div>
       </div>
 
+      {/* Claimable Winnings Notification Banner */}
+      {claimablePositions.length > 0 && (
+        <div className="claimable-payout-banner">
+          <div className="claimable-payout-info">
+            <div className="claimable-trophy-wrap">
+              <Trophy size={20} className="text-success" />
+            </div>
+            <div>
+              <div className="claimable-payout-title">
+                ${totalClaimable.toFixed(2)} tUSDC Ready to Claim!
+              </div>
+              <div className="claimable-payout-sub">
+                {claimablePositions.length} winning position{claimablePositions.length > 1 ? "s" : ""} resolved on Somnia Shannon.
+              </div>
+            </div>
+          </div>
+          <button
+            className="claim-all-btn"
+            onClick={handleClaimAll}
+            disabled={!!redeemingId}
+          >
+            <Trophy size={15} />
+            <span>{redeemingId ? "Redeeming..." : `Claim All ($${totalClaimable.toFixed(2)} tUSDC)`}</span>
+          </button>
+        </div>
+      )}
+
       {/* Navigation Tabs */}
       <div className="portfolio-tabs">
         <button
@@ -607,6 +643,9 @@ export default function Portfolio() {
         >
           <CheckCircle2 size={15} />
           <span>Closed Positions ({closedPositions.length})</span>
+          {claimablePositions.length > 0 && (
+            <span className="tab-claim-count">{claimablePositions.length} WON</span>
+          )}
         </button>
 
         <button
