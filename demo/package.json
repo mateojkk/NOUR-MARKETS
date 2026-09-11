@@ -1,0 +1,29 @@
+{
+  "name": "demo",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts NourDemo out/nour-demo.mp4",
+    "still": "remotion still src/index.ts NourDemo out/still.png"
+  },
+  "keywords": [],
+  "type": "module",
+  "dependencies": {
+    "@remotion/cli": "^4.0.523",
+    "@remotion/renderer": "^4.0.523",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "remotion": "^4.0.523",
+    "typescript": "^7.0.2"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true
+  },
+  "remotion": {
+    "publicDir": "src/public"
+  }
+}

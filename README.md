@@ -1,33 +1,71 @@
-# nour
+<div align="center">
+  <img src="usenour/src/assets/logo nour .png" height="72" alt="NOUR" />
+  <h3>prediction markets on Somnia.</h3>
+  <p>
+    <a href="https://github.com/mateojkk/nour"><img src="https://img.shields.io/badge/chain-Somnia%20Shannon%20Testnet-afd9c6?style=flat-square" /></a>
+    <a href="https://github.com/mateojkk/nour"><img src="https://img.shields.io/badge/protocol-DreamDEX%20Event%20Contracts-afd9c6?style=flat-square" /></a>
+    <a href="https://github.com/mateojkk/nour"><img src="https://img.shields.io/badge/build-passing-22c55e?style=flat-square" /></a>
+  </p>
+</div>
 
-the future of prediction markets on Somnia.
+---
 
-### what is nour?
-nour is a next-gen prediction market platform built for speed, clarity, and sub-second execution on **Somnia Layer 1**, powered by **DreamDEX Event Contracts**.
+**Nour** is a consumer-first, institutional-grade prediction market exchange built natively on **Somnia Layer 1** and powered by **DreamDEX Event Contracts**. Trade rolling 5-minute and 15-minute binary crypto windows — *Will ETH close UP?* — with sub-second on-chain execution, passwordless login, and crystal-clear settlement.
 
 Built for the **Somnia × DreamDEX Event Contracts Hackathon**.
 
-### features
-- **Sub-second execution**: high-frequency binary prediction trading on live DreamDEX Event Contracts (5m, 15m, 1h rolling windows) powered by Somnia's ultra-fast finality.
-- **Real on-chain markets only**: live markets are served straight from the DreamDEX indexer — no demo or synthetic listings.
-- **On-chain CLOB trading**: direct interaction with DreamDEX Event Contracts (Buy Up / Buy Down, maker post-only & taker IOC).
-- **Passwordless email login (6-digit code) + Web3 wallet support** (MetaMask, Rabby, Injected) — no social OAuth.
-- **Integrated testnet faucet**: 1-click testnet `tUSDC` minting directly in the UI.
-- **Automated settlement**: claim 1:1 payouts for winning positions after market expiry.
-- **Real-time price charts**: live OHLC candle history from the DreamDEX indexer.
-- **Minimalist, premium dark-mode interface**: institutional-grade charts, group series views, and real-time order flow.
+---
 
-### tech stack
-- **Architecture**: Vercel Serverless Monorepo
-- **Frontend**: React 19 + Vite (Rolldown) + TypeScript + Recharts + Lucide Icons
-- **Web3 & Contracts**: Viem + Wagmi + Ethers v6 + Magic SDK (EVM)
-- **Blockchain**: Somnia Shannon Testnet (`chainId: 50312`)
-- **Protocol**: DreamDEX Event Contracts (`BinaryMarketsModule`, `BinarySettlement`, `OutcomeToken6909`)
-- **Serverless API**: Vercel Serverless Functions (`/api/markets`, `/api/timeseries`, `/api/orderbook`, `/api/faucet`)
+## features
 
-### deployed contracts (Somnia Shannon Testnet)
+| | |
+|---|---|
+| ⚡ **Sub-second execution** | High-frequency binary trading on 5m, 15m rolling windows via Somnia's ultra-fast EVM finality |
+| 📊 **Real on-chain markets only** | Every card is a live DreamDEX event contract from the indexer — zero synthetic data |
+| 📖 **On-chain CLOB trading** | Direct Buy UP / Buy DOWN against the DreamDEX binary pool (taker IOC + maker post-only) |
+| ✉️ **Passwordless email login** | Custom in-app 6-digit OTP via Magic SDK — no browser extension, no password |
+| 🦊 **Web3 wallet support** | MetaMask, Rabby, any injected EIP-1193 wallet on Somnia Shannon Testnet |
+| 🚰 **Integrated testnet faucet** | 1-click claim of 1,000 tUSDC collateral directly inside the app |
+| 🏆 **Automated settlement** | 1-click on-chain `BinarySettlement.redeem()` — 1:1 winning token → tUSDC |
+| 💹 **Real-time price charts** | Live OHLC candle history + live order book top-of-book polling every 3.5s |
+| 🌙 **Minimalist dark UI** | Inter font · asphalt & mint palette · full mobile responsiveness |
+
+---
+
+## architecture
+
+```
+┌─────────────────────────────────────────────┐
+│           Nour Web App (React 19 + Vite)    │
+│         Wagmi · Viem · Magic SDK · Ethers   │
+└──────────────────┬──────────────────────────┘
+                   │
+       ┌───────────┴───────────┐
+       │                       │
+  Vercel Serverless        Direct Web3 RPC
+  ─────────────────        ───────────────
+  /api/markets             Somnia Shannon
+  /api/timeseries          Testnet (50312)
+  /api/orderbook                │
+  /api/faucet                   │
+                    ┌───────────┘
+                    │
+        DreamDEX Event Contracts
+        ────────────────────────
+        BinaryMarketsModule
+        MarketsCore
+        BinarySettlement
+        OutcomeToken6909 (ERC-6909)
+        OracleHub
+        Collateral (tUSDC)
+```
+
+---
+
+## deployed contracts — Somnia Shannon Testnet (`chainId: 50312`)
+
 | Contract | Address |
-| --- | --- |
+|---|---|
 | BinaryMarketsModule | `0x3ecC694Cef705358864a646142ac17A90E29e388` |
 | MarketsCore | `0x2802504314685D89bF6C992CA5a8e7cC78bc0294` |
 | BinarySettlement | `0xbF4a49e0Dfd092e5FBE8E5761064C49533e6Ed23` |
@@ -35,25 +73,84 @@ Built for the **Somnia × DreamDEX Event Contracts Hackathon**.
 | OracleHub | `0xe40db387cC98601Dd11bd634fF2f3AD5686dE32b` |
 | Collateral (tUSDC) | `0x70a86D8842FB63C4Ad2b7cdddF530eBf1BB25d8E` |
 
-### quickstart
+---
 
-```bash
-# Clone repository
-git clone https://github.com/mateojkk/nour.git
-cd nour
+## tech stack
 
-# Install dependencies
-npm install
-
-# Run locally
-npm run dev
-
-# Build for Vercel
-npm run build
-```
-
-### philosophical note
-prediction markets are truth machines. nour is the interface for that truth.
+| Layer | Tech |
+|---|---|
+| Frontend | React 19, Vite (Rolldown), TypeScript |
+| Styling | Pure CSS, Inter 300/500, CSS custom properties |
+| Charts | Recharts (OHLC candles), custom SVG sparklines |
+| Web3 | Viem, Wagmi, Ethers v6, Magic SDK |
+| Auth | Magic `loginWithEmailOTP` (headless, custom OTP UI) |
+| Backend | Vercel Serverless Functions (Node 20) |
+| Database | Supabase (positions, trades, transfers, user profiles) |
+| Blockchain | Somnia Shannon Testnet, DreamDEX `@somnia-chain/markets-sdk` |
 
 ---
-build. predicted. trade.
+
+## quickstart
+
+```bash
+git clone https://github.com/mateojkk/nour.git
+cd nour
+npm install
+
+# dev
+npm run dev --prefix usenour
+
+# build
+npm run build --prefix usenour
+```
+
+Deploys to Vercel with zero configuration.
+
+---
+
+## user flow
+
+```
+Sign in (email OTP or wallet)
+        ↓
+Claim tUSDC from faucet (1-click)
+        ↓
+Browse live 5m / 15m markets
+        ↓
+Select UP or DOWN · enter amount · place order
+        ↓
+Order executes on Somnia in < 1 second
+        ↓
+Track open P&L in Portfolio
+        ↓
+Window resolves → 1-click claim winning payout
+```
+
+---
+
+## monorepo structure
+
+```
+nour/
+├── api/                  # Vercel Serverless Functions
+│   ├── markets.ts        # DreamDEX market feed
+│   ├── timeseries.ts     # OHLC candle data
+│   ├── orderbook.ts      # Order book snapshots
+│   └── faucet.ts         # tUSDC faucet relay
+├── usenour/              # React frontend
+│   ├── src/
+│   │   ├── components/   # TradePage, Portfolio, MarketCard, …
+│   │   ├── contexts/     # EvmWalletContext, ProfileContext
+│   │   ├── hooks/        # useMarketData, useMarketWebSocket
+│   │   ├── services/     # dreamdex.ts, transferService.ts, userService.ts
+│   │   └── styles/       # variables.css, base.css, cards.css
+│   └── vite.config.ts
+└── demo/                 # Remotion animated demo video
+    └── src/NourDemo.tsx
+```
+
+---
+
+> *prediction markets are truth machines. nour is the interface for that truth.*
+
+**build. predict. trade.**

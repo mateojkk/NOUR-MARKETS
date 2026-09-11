@@ -29,3 +29,9 @@ __pycache__/
 .idea/
 *.log
 .codex
+# Remotion demo
+demo/node_modules/
+demo/out/
+demo/logo.png
+demo/icon.png
+demo/src/public/
