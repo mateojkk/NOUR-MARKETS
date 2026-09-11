@@ -5,7 +5,6 @@ import {
   Droplets,
   ExternalLink,
   ArrowDownToLine,
-  ArrowUpFromLine,
   RefreshCw,
   Copy,
   Check,
@@ -25,8 +24,6 @@ import styles from "./TransferHistory.module.css";
 interface TransferHistoryProps {
   walletAddress: string | null;
   collateralBalance?: number;
-  onOpenDeposit?: () => void;
-  onOpenWithdraw?: () => void;
 }
 
 type FilterType = "all" | "credit" | "debit";
@@ -34,8 +31,6 @@ type FilterType = "all" | "credit" | "debit";
 export default function TransferHistory({
   walletAddress,
   collateralBalance = 0,
-  onOpenDeposit,
-  onOpenWithdraw,
 }: TransferHistoryProps) {
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [filter, setFilter] = useState<FilterType>("all");
@@ -153,18 +148,6 @@ export default function TransferHistory({
         </div>
 
         <div className={styles.headerRight}>
-          {onOpenDeposit && (
-            <button className={styles.actionBtnDeposit} onClick={onOpenDeposit} title="Deposit or Claim tUSDC">
-              <ArrowDownToLine size={13} />
-              <span>Deposit</span>
-            </button>
-          )}
-          {onOpenWithdraw && (
-            <button className={styles.actionBtnWithdraw} onClick={onOpenWithdraw} title="Withdraw tUSDC">
-              <ArrowUpFromLine size={13} />
-              <span>Withdraw</span>
-            </button>
-          )}
           <button className={styles.refreshBtn} onClick={loadHistory} title="Reload activity ledger">
             <RefreshCw size={14} className={loading ? "spinning" : ""} />
           </button>
@@ -188,20 +171,6 @@ export default function TransferHistory({
               ? "No deposits, withdrawals, or trades found for this wallet yet."
               : `You have no ${filter} transactions in your account history.`}
           </p>
-          <div className={styles.emptyActions}>
-            {onOpenDeposit && (
-              <button className={styles.emptyCtaDeposit} onClick={onOpenDeposit}>
-                <Droplets size={15} />
-                <span>Claim 1,000 tUSDC Faucet</span>
-              </button>
-            )}
-            {onOpenWithdraw && (
-              <button className={styles.emptyCtaWithdraw} onClick={onOpenWithdraw}>
-                <ArrowUpFromLine size={15} />
-                <span>Withdraw tUSDC</span>
-              </button>
-            )}
-          </div>
         </div>
       ) : (
         <div className={styles.transferList}>

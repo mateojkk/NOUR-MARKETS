@@ -20,6 +20,7 @@ export interface Market {
   no_token_id?: string;
   expiry?: number;
   intervalSec?: number;
+  tradingStart?: number;
   asset?: string;
   onchainStatus?: number; // 1 = Trading, 2 = Locked, 3 = Finalized
   description?: string;

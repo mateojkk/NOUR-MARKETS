@@ -1,23 +1,14 @@
 import { useEvmWallet } from "../contexts/EvmWalletContext";
-import { useState, useEffect, useRef, type FC } from "react";
+import { useState, useRef, type FC } from "react";
 import { 
   User, 
-  Bell, 
-  Settings2, 
   LogOut, 
   Camera, 
-  Sparkles,
-  Zap,
-  Twitter,
-  ChevronLeft,
-  Moon,
-  Sun,
-  Eye,
-  EyeOff,
-  Wallet,
-  Copy,
-  Check,
-  ExternalLink
+  ChevronLeft, 
+  Wallet, 
+  Copy, 
+  Check, 
+  ExternalLink 
 } from "lucide-react";
 import { useProfile } from "../contexts/ProfileContext";
 
@@ -27,9 +18,9 @@ interface SettingsProps {
   setTheme?: (theme: "light" | "dark") => void;
 }
 
-type SettingsView = "main" | "profile" | "preferences";
+type SettingsView = "main" | "profile";
 
-const Settings: FC<SettingsProps> = ({ onClose, theme, setTheme }) => {
+const Settings: FC<SettingsProps> = ({ onClose }) => {
   const { connected, disconnect } = useEvmWallet();
   const { profile, walletAddress, updateDisplayName, updateUsername, updateBio, updateAvatar, clearProfile } = useProfile();
   
@@ -37,10 +28,6 @@ const Settings: FC<SettingsProps> = ({ onClose, theme, setTheme }) => {
   const [currentView, setCurrentView] = useState<SettingsView>("main");
   const [slideDirection, setSlideDirection] = useState<"left" | "right">("right");
   const [copied, setCopied] = useState(false);
-
-  // Preferences State
-  const [notifications, setNotifications] = useState(true);
-  const [hideBalances, setHideBalances] = useState(false);
   
   // Profile Edit State
   const [editName, setEditName] = useState(profile.displayName || "");
@@ -51,13 +38,6 @@ const Settings: FC<SettingsProps> = ({ onClose, theme, setTheme }) => {
   // Derived data
   const displayName = profile.displayName || (walletAddress ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : 'User');
   const displayUsername = profile.username || (walletAddress ? `@${walletAddress.slice(0, 8)}.nour.app` : '');
-
-  useEffect(() => {
-    const savedNotifications = localStorage.getItem("nour-notifications") !== "false";
-    const savedHideBalances = localStorage.getItem("nour-hide-balances") === "true";
-    setNotifications(savedNotifications);
-    setHideBalances(savedHideBalances);
-  }, []);
 
   const navigateTo = (view: SettingsView) => {
     setSlideDirection("right");
@@ -84,18 +64,6 @@ const Settings: FC<SettingsProps> = ({ onClose, theme, setTheme }) => {
     if (walletAddress) {
       window.open(`https://shannon-explorer.somnia.network/address/${walletAddress}`, '_blank');
     }
-  };
-
-  const toggleNotifications = () => {
-    const newValue = !notifications;
-    setNotifications(newValue);
-    localStorage.setItem("nour-notifications", String(newValue));
-  };
-  
-  const toggleHideBalances = () => {
-    const newValue = !hideBalances;
-    setHideBalances(newValue);
-    localStorage.setItem("nour-hide-balances", String(newValue));
   };
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -160,28 +128,6 @@ const Settings: FC<SettingsProps> = ({ onClose, theme, setTheme }) => {
           <div className="menu-icon"><User size={18} /></div>
           <span className="menu-label">Profile</span>
           <div className="menu-icon"><ChevronLeft size={16} style={{transform: 'rotate(180deg)'}} /></div>
-        </button>
-        
-        <button className="menu-item" onClick={() => window.open('https://t.me/trynour', '_blank')}>
-          <div className="menu-icon"><Sparkles size={18} /></div>
-          <span className="menu-label">Community</span>
-        </button>
-        
-        <button className="menu-item">
-            <div className="menu-icon"><Zap size={18} /></div>
-            <span className="menu-label">Mode</span>
-            <span className="menu-badge beta">Beta</span>
-        </button>
-
-        <button className="menu-item" onClick={() => navigateTo("preferences")}>
-          <div className="menu-icon"><Settings2 size={18} /></div>
-          <span className="menu-label">Preferences</span>
-          <div className="menu-icon"><ChevronLeft size={16} style={{transform: 'rotate(180deg)'}} /></div>
-        </button>
-
-        <button className="menu-item" onClick={() => window.open('https://x.com/nourterminal', '_blank')}>
-          <div className="menu-icon"><Twitter size={18} /></div>
-          <span className="menu-label">Updates</span>
         </button>
       </div>
 
@@ -302,60 +248,6 @@ const Settings: FC<SettingsProps> = ({ onClose, theme, setTheme }) => {
     </>
   );
 
-  const renderPreferencesView = () => (
-    <>
-      <div className="settings-header">
-        <button className="settings-back-btn" onClick={navigateBack}>
-          <ChevronLeft size={20} />
-        </button>
-        <span className="settings-title">Preferences</span>
-        <div style={{width: 20}} />
-      </div>
-
-      <div className="settings-content">
-        <div className="settings-section">
-          <div className="section-label">Appearance</div>
-          <div className="theme-toggle-row">
-            <button 
-              className={`theme-option ${theme === 'light' ? 'active' : ''}`}
-              onClick={() => setTheme?.('light')}
-            >
-              <Sun size={18} />
-              <span>Light</span>
-            </button>
-            <button 
-              className={`theme-option ${theme === 'dark' ? 'active' : ''}`}
-              onClick={() => setTheme?.('dark')}
-            >
-              <Moon size={18} />
-              <span>Dark</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="settings-section">
-          <div className="section-label">Privacy</div>
-          <button className="menu-item" onClick={toggleHideBalances}>
-            <div className="menu-icon">
-              {hideBalances ? <EyeOff size={18} /> : <Eye size={18} />}
-            </div>
-            <span className="menu-label">Hide Balances</span>
-            <div className={`menu-toggle ${hideBalances ? 'on' : ''}`} />
-          </button>
-        </div>
-
-        <div className="settings-section">
-          <div className="section-label">System</div>
-          <button className="menu-item" onClick={toggleNotifications}>
-            <div className="menu-icon"><Bell size={18} /></div>
-            <span className="menu-label">Notifications</span>
-            <div className={`menu-toggle ${notifications ? 'on' : ''}`} />
-          </button>
-        </div>
-      </div>
-    </>
-  );
-
   return (
     <>
       {/* Invisible overlay to handle click-outside */}
@@ -363,11 +255,7 @@ const Settings: FC<SettingsProps> = ({ onClose, theme, setTheme }) => {
 
       <div className="settings-card">
         <div className={`settings-view ${slideDirection}`}>
-          {    
-             currentView === 'main' ? renderMainView() :
-             currentView === 'profile' ? renderProfileView() :
-             renderPreferencesView()
-          }
+          {currentView === 'main' ? renderMainView() : renderProfileView()}
         </div>
       </div>
     </>

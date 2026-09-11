@@ -7,10 +7,10 @@
 
 /* === NOUR PALETTE - Light Mode (Paper base) === */
 :root {
-  /* Fonts */
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, system-ui, sans-serif;
-  --font-display: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  /* Fonts - Strictly Inter font (light & medium variants) */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "Inter", -apple-system, BlinkMacSystemFont, monospace;
 
   /* Paper-based backgrounds */
   --bg: #efede3;
@@ -61,10 +61,10 @@
 
 /* === Dark Mode (Asphalt base) === */
 .dark {
-  /* Fonts */
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, system-ui, sans-serif;
-  --font-display: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  /* Fonts - Strictly Inter font (light & medium variants) */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "Inter", -apple-system, BlinkMacSystemFont, monospace;
 
   /* Asphalt-based backgrounds */
   --bg: #1c1c1c;

@@ -96,6 +96,7 @@ function localApiDevPlugin() {
                 lastPrice
                 expiry
                 intervalSec
+                tradingStart
                 cumulativeQuoteVolume
                 yesTokenId
                 noTokenId
@@ -111,6 +112,7 @@ function localApiDevPlugin() {
                 lastPrice
                 expiry
                 intervalSec
+                tradingStart
                 cumulativeQuoteVolume
                 yesTokenId
                 noTokenId
@@ -226,6 +228,7 @@ function localApiDevPlugin() {
                     no_token_id: String(m.noTokenId || "2"),
                     expiry: Number(m.expiry || now + 300),
                     intervalSec,
+                    tradingStart: Number(m.tradingStart || (m.expiry ? Number(m.expiry) - intervalSec : now)),
                     asset,
                     onchainStatus: isLive ? 1 : 4,
                     active: isLive,

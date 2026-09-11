@@ -1,7 +1,7 @@
 
 
-/* Font imports must come FIRST */
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+/* Font imports must come FIRST - Only Inter font: light (300) and medium (500) variants */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;500&display=swap");
 
 @import "tailwindcss";
 
@@ -22,9 +22,9 @@
 @import "./styles/charts.css";
 @import "./styles/footer.css";
 
-/* Tailwind theme overrides */
+/* Tailwind theme overrides - strictly Inter */
 @theme {
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
-  --font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "Inter", -apple-system, BlinkMacSystemFont, monospace;
 }

@@ -109,6 +109,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         lastPrice
         expiry
         intervalSec
+        tradingStart
         cumulativeQuoteVolume
         yesTokenId
         noTokenId
@@ -124,6 +125,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         lastPrice
         expiry
         intervalSec
+        tradingStart
         cumulativeQuoteVolume
         yesTokenId
         noTokenId
@@ -236,6 +238,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             no_token_id: String(m.noTokenId || "2"),
             expiry: Number(m.expiry || nowSec + 300),
             intervalSec,
+            tradingStart: Number(m.tradingStart || (m.expiry ? Number(m.expiry) - intervalSec : nowSec)),
             asset,
             onchainStatus: isLive ? 1 : 4,
             active: isLive,

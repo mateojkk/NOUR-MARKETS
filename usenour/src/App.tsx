@@ -122,9 +122,15 @@ function App() {
     }
 
     if (sortBy === "volume") {
-      result.sort((a, b) => b.totalVolume - a.totalVolume);
+      result.sort((a, b) => (b.totalVolume - a.totalVolume) || ((b.markets[0]?.tradingStart || 0) - (a.markets[0]?.tradingStart || 0)));
     } else if (sortBy === "newest") {
-      result.sort((a, b) => (b.markets[0]?.expiry || 0) - (a.markets[0]?.expiry || 0));
+      result.sort((a, b) => {
+        const aStart = a.markets[0]?.tradingStart ?? (a.markets[0]?.expiry ? a.markets[0].expiry - (a.markets[0].intervalSec || 900) : 0);
+        const bStart = b.markets[0]?.tradingStart ?? (b.markets[0]?.expiry ? b.markets[0].expiry - (b.markets[0].intervalSec || 900) : 0);
+        return bStart - aStart;
+      });
+    } else if (sortBy === "trending") {
+      result.sort((a, b) => b.totalVolume - a.totalVolume);
     }
 
     return result;

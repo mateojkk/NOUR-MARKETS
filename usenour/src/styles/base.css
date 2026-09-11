@@ -78,7 +78,7 @@ html:not(.dark) {
 
 body {
   font-family: var(--font-sans);
-  font-weight: 400;
+  font-weight: 300; /* Inter Light variant */
   background-color: var(--bg);
   color: var(--text);
   min-height: 100vh;
@@ -88,6 +88,61 @@ body {
   -webkit-text-size-adjust: 100%;
   text-rendering: optimizeLegibility;
   text-shadow: none;
+}
+
+/* Enforce only Inter light (300) and medium (500) variants across the application */
+h1, h2, h3, h4, h5, h6, b, strong, th, .font-bold, .font-semibold, .font-medium {
+  font-family: var(--font-sans) !important;
+  font-weight: 500 !important; /* Inter Medium variant */
+}
+
+p, span, div, a, li, label {
+  font-family: var(--font-sans);
+}
+
+button, input, select, textarea {
+  font-family: var(--font-sans) !important;
+}
+
+/* Mobile responsiveness typography scaling: smaller, tighter fonts on phones */
+@media (max-width: 768px) {
+  html {
+    font-size: 14px;
+  }
+
+  body {
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  h1 { font-size: 20px !important; }
+  h2 { font-size: 17px !important; }
+  h3 { font-size: 15px !important; }
+  h4 { font-size: 13px !important; }
+
+  button, input, select {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  html {
+    font-size: 13px;
+  }
+
+  body {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  h1 { font-size: 18px !important; }
+  h2 { font-size: 15px !important; }
+  h3 { font-size: 13.5px !important; }
+  h4 { font-size: 12px !important; }
+
+  button, input, select {
+    font-size: 11.5px;
+  }
 }
 
 /* Prevent iOS Safari from forcing native light styles or white backgrounds on inputs */

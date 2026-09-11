@@ -1144,14 +1144,12 @@ export default function Portfolio() {
         </div>
       )}
 
-      {/* Tab 3: Transfers (Deposits & Withdrawals) */}
+      {/* Tab 3: Transfers & Activity */}
       {activeTab === "transfers" && (
         <div className="tab-pane">
           <TransferHistory
             walletAddress={walletAddress}
             collateralBalance={collateralBalance}
-            onOpenDeposit={() => setWalletModal("deposit")}
-            onOpenWithdraw={() => setWalletModal("withdraw")}
           />
         </div>
       )}
