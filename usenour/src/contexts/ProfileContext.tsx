@@ -65,32 +65,46 @@ export const ProfileProvider: React.FC<ProfileProviderProps> = ({ children }) =>
   const loadProfile = async (address: string) => {
     try {
       setIsLoading(true);
-      // Instant cache retrieval
-      const cacheKey = `nour_profile_${address.toLowerCase()}`;
-      const cached = localStorage.getItem(cacheKey);
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached);
-          setProfileState(prev => ({ ...prev, ...parsed }));
-        } catch {}
-      }
 
-      const res = await authFetch(`${apiUrl}/api/user/${address}/profile`);
-      const contentType = res.headers.get("content-type") || "";
-      if (res.ok && contentType.includes("application/json")) {
-        const data = await res.json();
-        const updated = {
-          displayName: data.display_name || "",
-          username: data.username || "",
-          bio: data.bio || "",
-          avatarUrl: data.avatar_url || "",
-          isBetaUser: true,
-        };
-        setProfileState(updated);
-        localStorage.setItem(cacheKey, JSON.stringify(updated));
-      }
+      // 1. Try backend serverless API
+      try {
+        const res = await authFetch(`${apiUrl}/api/user/${address}/profile`);
+        const contentType = res.headers.get("content-type") || "";
+        if (res.ok && contentType.includes("application/json")) {
+          const data = await res.json();
+          const updated = {
+            displayName: data.display_name || "",
+            username: data.username || "",
+            bio: data.bio || "",
+            avatarUrl: data.avatar_url || "",
+            isBetaUser: true,
+          };
+          setProfileState(updated);
+          return;
+        }
+      } catch {}
+
+      // 2. Direct fallback to Supabase Database (Never localStorage)
+      try {
+        const { getSupabaseClient } = await import("../services/supabaseClient");
+        const sb = getSupabaseClient();
+        const { data, error } = await sb
+          .from("users")
+          .select("*")
+          .eq("wallet_address", address.toLowerCase())
+          .maybeSingle();
+        if (data && !error) {
+          setProfileState({
+            displayName: data.display_name || "",
+            username: data.username || "",
+            bio: data.bio || "",
+            avatarUrl: data.avatar_url || "",
+            isBetaUser: true,
+          });
+        }
+      } catch {}
     } catch (error) {
-      console.warn("Notice: Profile API unreachable, maintaining local profile state.", error);
+      console.warn("Notice: Profile fetch failed.", error);
     } finally {
       setIsLoading(false);
     }
@@ -103,26 +117,35 @@ export const ProfileProvider: React.FC<ProfileProviderProps> = ({ children }) =>
     }
     
     try {
-      // Optimistic update and save to localStorage
-      const cacheKey = `nour_profile_${walletAddress.toLowerCase()}`;
-      setProfileState(prev => {
-        const nextProfile = { ...prev, ...updates };
-        localStorage.setItem(cacheKey, JSON.stringify(nextProfile));
-        return nextProfile;
-      });
+      const nextProfile = { ...profile, ...updates };
+      setProfileState(nextProfile);
 
-      // Also dispatch to API if endpoint is available
       const payload: Record<string, string | undefined> = {};
       if (updates.displayName !== undefined) payload.display_name = updates.displayName;
       if (updates.username !== undefined) payload.username = updates.username;
       if (updates.bio !== undefined) payload.bio = updates.bio;
       if (updates.avatarUrl !== undefined) payload.avatar_url = updates.avatarUrl;
 
+      // 1. Dispatch to serverless API
       await authFetch(`${apiUrl}/api/user/${walletAddress}/profile`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       }).catch(() => {});
+
+      // 2. Direct persistence to Supabase Database (Never localStorage)
+      try {
+        const { getSupabaseClient } = await import("../services/supabaseClient");
+        const sb = getSupabaseClient();
+        await sb.from("users").upsert({
+          wallet_address: walletAddress.toLowerCase(),
+          ...(payload.display_name !== undefined ? { display_name: payload.display_name } : {}),
+          ...(payload.username !== undefined ? { username: payload.username } : {}),
+          ...(payload.bio !== undefined ? { bio: payload.bio } : {}),
+          ...(payload.avatar_url !== undefined ? { avatar_url: payload.avatar_url } : {}),
+          updated_at: new Date().toISOString()
+        }, { onConflict: "wallet_address" });
+      } catch {}
     } catch (error) {
       console.warn("Profile save warning:", error);
     }
