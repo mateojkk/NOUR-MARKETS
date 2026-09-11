@@ -157,6 +157,15 @@ export default function Portfolio() {
   const [closeSuccess, setCloseSuccess] = useState<string | null>(null);
   const [copiedAddress, setCopiedAddress] = useState(false);
 
+  // Derive active position to keep modal price and P&L reactive to live market feed ticks
+  const activePositionToClose = useMemo(() => {
+    if (!positionToClose) return null;
+    const live = positions.find(
+      (p) => p.ticker.toLowerCase() === positionToClose.ticker.toLowerCase() && p.side === positionToClose.side
+    );
+    return live || positionToClose;
+  }, [positionToClose, positions]);
+
   const fetchPortfolio = useCallback(async () => {
     if (!walletAddress) return;
     setLoading(true);
@@ -319,9 +328,10 @@ export default function Portfolio() {
   };
 
   const handleConfirmClose = async () => {
-    if (!walletProvider || !positionToClose || !walletAddress) return;
-    if (closeShares <= 0 || closeShares > positionToClose.contracts) {
-      setCloseError(`Please enter a valid contract amount (1 to ${positionToClose.contracts})`);
+    const activePos = activePositionToClose;
+    if (!walletProvider || !activePos || !walletAddress) return;
+    if (closeShares <= 0 || closeShares > activePos.contracts) {
+      setCloseError(`Please enter a valid contract amount (1 to ${activePos.contracts})`);
       return;
     }
 
@@ -329,41 +339,41 @@ export default function Portfolio() {
     setCloseError(null);
     setCloseSuccess(null);
 
-    if (positionToClose.isSettled) {
+    if (activePos.isSettled) {
       setClosingStatus(null);
       setCloseError("This market window has already ended and settled. Please click 'Claim Payout' to redeem.");
       return;
     }
 
-    const pool = positionToClose.poolAddress;
+    const pool = activePos.poolAddress;
     if (!pool || pool.toLowerCase() === DREAMDEX_CONTRACTS.binaryMarketsModule.toLowerCase()) {
       setClosingStatus(null);
       setCloseError("This position's market does not have an active binary pool address on Somnia.");
       return;
     }
-      const priceProb = positionToClose.currentPrice / 100;
+    const priceProb = activePos.currentPrice / 100;
 
     try {
       const result = await placeDreamDexOrder({
         walletProvider,
         poolAddress: pool,
-        side: positionToClose.side,
+        side: activePos.side,
         action: "sell",
         priceProb,
         contractsAmount: closeShares,
         orderType: "limit",
       });
 
-      const netProceeds = (closeShares * positionToClose.currentPrice) / 100;
-      const estPnl = ((positionToClose.currentPrice - positionToClose.avgPrice) * closeShares) / 100;
+      const netProceeds = (closeShares * activePos.currentPrice) / 100;
+      const estPnl = ((activePos.currentPrice - activePos.avgPrice) * closeShares) / 100;
 
       await recordTrade(walletAddress, {
-        ticker: positionToClose.ticker,
-        title: positionToClose.title,
-        side: positionToClose.side,
+        ticker: activePos.ticker,
+        title: activePos.title,
+        side: activePos.side,
         action: "sell",
         amount: closeShares,
-        price: positionToClose.currentPrice,
+        price: activePos.currentPrice,
         total_cost: netProceeds,
         platform: "dreamdex",
         tx_signature: result.txHash,
@@ -835,7 +845,7 @@ export default function Portfolio() {
       )}
 
       {/* Close Position Modal */}
-      {positionToClose && (
+      {activePositionToClose && (
         <div className="close-modal-overlay" onClick={() => !closingStatus && setPositionToClose(null)}>
           <div className="close-modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="close-modal-header">
@@ -854,23 +864,23 @@ export default function Portfolio() {
 
             <div className="close-modal-market-info">
               <div className="close-modal-market-row">
-                <span className="close-modal-market-name">{formatMarketTitle(positionToClose.title)}</span>
-                <span className={`position-side-badge ${positionToClose.side}`}>
-                  {positionToClose.side === "yes" ? "UP (YES)" : "DOWN (NO)"}
+                <span className="close-modal-market-name">{formatMarketTitle(activePositionToClose.title)}</span>
+                <span className={`position-side-badge ${activePositionToClose.side}`}>
+                  {activePositionToClose.side === "yes" ? "UP (YES)" : "DOWN (NO)"}
                 </span>
               </div>
               <div className="close-modal-stats-grid">
                 <div className="close-modal-stat-item">
                   <span className="close-modal-stat-label">Contracts Held</span>
-                  <span className="close-modal-stat-value">{positionToClose.contracts.toLocaleString()}</span>
+                  <span className="close-modal-stat-value">{activePositionToClose.contracts.toLocaleString()}</span>
                 </div>
                 <div className="close-modal-stat-item">
                   <span className="close-modal-stat-label">Entry Avg</span>
-                  <span className="close-modal-stat-value">{positionToClose.avgPrice.toFixed(1)}¢</span>
+                  <span className="close-modal-stat-value">{activePositionToClose.avgPrice.toFixed(1)}¢</span>
                 </div>
                 <div className="close-modal-stat-item">
-                  <span className="close-modal-stat-label">Mark Price</span>
-                  <span className="close-modal-stat-value">{positionToClose.currentPrice.toFixed(1)}¢</span>
+                  <span className="close-modal-stat-label">Current Price</span>
+                  <span className="close-modal-stat-value">{activePositionToClose.currentPrice.toFixed(1)}¢</span>
                 </div>
               </div>
             </div>
@@ -878,17 +888,17 @@ export default function Portfolio() {
             <div className="close-modal-shares-section">
               <div className="close-modal-shares-header">
                 <span>Contracts to Close</span>
-                <span>Max: {positionToClose.contracts}</span>
+                <span>Max: {activePositionToClose.contracts}</span>
               </div>
               <div className="close-modal-input-wrap">
                 <input
                   type="number"
                   min="1"
-                  max={positionToClose.contracts}
+                  max={activePositionToClose.contracts}
                   value={closeShares || ""}
                   onChange={(e) => {
                     const val = parseInt(e.target.value, 10);
-                    setCloseShares(isNaN(val) ? 0 : Math.min(val, positionToClose.contracts));
+                    setCloseShares(isNaN(val) ? 0 : Math.min(val, activePositionToClose.contracts));
                   }}
                   className="close-modal-input"
                   placeholder="0"
@@ -898,8 +908,8 @@ export default function Portfolio() {
               <div className="percent-chips-row">
                 {[25, 50, 75, 100].map((pct) => {
                   const targetVal = pct === 100
-                    ? positionToClose.contracts
-                    : Math.max(1, Math.floor(positionToClose.contracts * (pct / 100)));
+                    ? activePositionToClose.contracts
+                    : Math.max(1, Math.floor(activePositionToClose.contracts * (pct / 100)));
                   const isActive = closeShares === targetVal;
                   return (
                     <button
@@ -917,8 +927,8 @@ export default function Portfolio() {
 
             {/* Financial Proceeds Breakdown */}
             {(() => {
-              const net = (closeShares * positionToClose.currentPrice) / 100;
-              const estPnl = ((positionToClose.currentPrice - positionToClose.avgPrice) * closeShares) / 100;
+              const net = (closeShares * activePositionToClose.currentPrice) / 100;
+              const estPnl = ((activePositionToClose.currentPrice - activePositionToClose.avgPrice) * closeShares) / 100;
               return (
                 <div className="close-modal-proceeds-box">
                   <div className="proceeds-row">
@@ -962,7 +972,7 @@ export default function Portfolio() {
                 type="button"
                 className="modal-confirm-btn"
                 onClick={handleConfirmClose}
-                disabled={!!closingStatus || closeShares <= 0 || closeShares > positionToClose.contracts}
+                disabled={!!closingStatus || closeShares <= 0 || closeShares > activePositionToClose.contracts}
               >
                 {closingStatus ? (
                   <>
@@ -971,7 +981,7 @@ export default function Portfolio() {
                   </>
                 ) : (
                   <span>
-                    Confirm Close · Payout ${((closeShares * positionToClose.currentPrice) / 100).toFixed(2)} tUSDC
+                    Confirm Close · Payout ${((closeShares * activePositionToClose.currentPrice) / 100).toFixed(2)} tUSDC
                   </span>
                 )}
               </button>
