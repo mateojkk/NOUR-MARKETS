@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { CheckCircle2, AlertCircle, X } from "lucide-react";
 import styles from "./Toast.module.css";
 
 export interface ToastData {
@@ -14,28 +15,69 @@ interface ToastProps {
 }
 
 const Toast: React.FC<ToastProps> = ({ toast, onRemove }) => {
+  const isError = toast.type === "error";
+  // Error toasts stay 6s so users have time to read, success 4s
+  const duration = isError ? 6000 : 4000;
+  const [isPaused, setIsPaused] = useState(false);
+  const remainingRef = useRef(duration);
+  const startTimeRef = useRef(Date.now());
+
   useEffect(() => {
+    if (isPaused) return;
+
+    startTimeRef.current = Date.now();
     const timer = setTimeout(() => {
       onRemove(toast.id);
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, [toast.id, onRemove]);
+    }, remainingRef.current);
+
+    return () => {
+      clearTimeout(timer);
+      remainingRef.current -= Date.now() - startTimeRef.current;
+    };
+  }, [toast.id, onRemove, isPaused]);
 
   return (
     <motion.div 
       layout
-      initial={{ y: -20, opacity: 0, scale: 0.8 }}
+      initial={{ y: -24, opacity: 0, scale: 0.92 }}
       animate={{ y: 0, opacity: 1, scale: 1 }}
-      exit={{ y: -10, opacity: 0, scale: 0.9, transition: { duration: 0.15 } }}
+      exit={{ y: -16, opacity: 0, scale: 0.94, transition: { duration: 0.2 } }}
       transition={{ 
         type: "spring", 
-        damping: 25, 
-        stiffness: 700,
-        mass: 0.6
+        damping: 24, 
+        stiffness: 400,
+        mass: 0.8
       }}
-      className={`${styles.toast} ${toast.type === "success" ? styles.toastSuccess : styles.toastError}`}
+      className={`${styles.toast} ${isError ? styles.toastError : styles.toastSuccess}`}
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+      onTouchStart={() => setIsPaused(true)}
+      onTouchEnd={() => setIsPaused(false)}
+      role="alert"
     >
-      <span className={styles.toastMessage}>{toast.message.toLowerCase()}</span>
+      <div className={styles.toastIconWrap}>
+        {isError ? (
+          <AlertCircle size={18} className={styles.iconError} />
+        ) : (
+          <CheckCircle2 size={18} className={styles.iconSuccess} />
+        )}
+      </div>
+
+      <div className={styles.toastContent}>
+        <span className={styles.toastMessage}>{toast.message}</span>
+      </div>
+
+      <button
+        type="button"
+        className={styles.toastCloseBtn}
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove(toast.id);
+        }}
+        aria-label="Dismiss notification"
+      >
+        <X size={14} />
+      </button>
     </motion.div>
   );
 };
