@@ -182,34 +182,36 @@ export default function Portfolio() {
         ? (backendPositionsRaw as any).positions
         : [];
 
-      // Identify any positions whose market is not in the live feed
-      const missingHexIds: string[] = [];
+      // Identify all positions that are settled or whose market is finalized/missing from live trading
+      const settledHexIds: string[] = [];
       backendPositions.forEach((p: PositionRecord) => {
         const pSuffix = p.ticker?.split("-").pop()?.toLowerCase();
-        const found = markets.some((m) => {
+        const isLive = markets.some((m) => {
+          if (m.closed || m.active === false) return false;
+          if (m.expiry && Date.now() / 1000 > m.expiry) return false;
           if (m.ticker === p.ticker) return true;
           const mSuffix = m.ticker?.split("-").pop()?.toLowerCase();
           if (pSuffix && mSuffix && pSuffix === mSuffix) return true;
           if (pSuffix && m.marketId && m.marketId.toLowerCase().endsWith(pSuffix)) return true;
           return false;
         });
-        if (!found && pSuffix && /^[0-9a-f]+$/i.test(pSuffix)) {
-          missingHexIds.push(`0x${pSuffix.padStart(64, "0")}`);
+        if (!isLive && pSuffix && /^[0-9a-f]+$/i.test(pSuffix)) {
+          settledHexIds.push(`0x${pSuffix.padStart(64, "0")}`);
         }
       });
 
-      const settledDataMap = missingHexIds.length > 0
-        ? await fetchBatchSettledMarkets(missingHexIds)
+      const settledDataMap = settledHexIds.length > 0
+        ? await fetchBatchSettledMarkets(settledHexIds)
         : new Map<string, SettledOnchainData>();
 
       const mappedPositions: PortfolioPosition[] = backendPositions.map((p: PositionRecord) => {
         const pSuffix = p.ticker?.split("-").pop()?.toLowerCase();
+        // Match strictly by ticker, suffix, or marketId — NEVER by recurring window question title!
         const market = markets.find((m) => {
           if (m.ticker === p.ticker) return true;
           const mSuffix = m.ticker?.split("-").pop()?.toLowerCase();
           if (pSuffix && mSuffix && pSuffix === mSuffix) return true;
           if (pSuffix && m.marketId && m.marketId.toLowerCase().endsWith(pSuffix)) return true;
-          if (p.title && m.title && p.title.trim().toLowerCase() === m.title.trim().toLowerCase()) return true;
           return false;
         });
 
@@ -225,39 +227,46 @@ export default function Portfolio() {
         let poolAddress = market?.poolAddress;
         let marketId = market?.marketId;
 
-        if (market) {
+        // 1. Check if the market has resolved on-chain
+        if (onchainSettled && onchainSettled.isResolved) {
+          isSettled = true;
+          poolAddress = onchainSettled.poolAddress || poolAddress;
+          marketId = onchainSettled.marketId || marketId;
+          const userWon = (p.side === "yes" && onchainSettled.winningOutcome === 0) ||
+                          (p.side === "no" && onchainSettled.winningOutcome === 1);
+          if (userWon) {
+            settlementStatus = "won";
+            currentPrice = 100;
+          } else {
+            settlementStatus = "lost";
+            currentPrice = 0;
+          }
+        } else if (market && !market.closed && market.active !== false && (!market.expiry || Date.now() / 1000 <= market.expiry)) {
+          // 2. Market is currently actively trading on-chain
+          isSettled = false;
           poolAddress = market.poolAddress || DREAMDEX_CONTRACTS.binaryMarketsModule;
           marketId = market.marketId;
-          isSettled = Boolean(market.closed) || (Boolean(market.expiry) && Date.now() / 1000 > (market.expiry || 0));
           currentPrice = p.side === "yes" ? market.price_yes : market.price_no;
-          if (isSettled) {
-            settlementStatus = "pending";
-          }
         } else if (onchainSettled) {
+          // 3. Market is finalized/expired, awaiting resolution event
           isSettled = true;
-          poolAddress = onchainSettled.poolAddress;
-          marketId = onchainSettled.marketId;
-
-          if (onchainSettled.isResolved) {
-            const userWon = (p.side === "yes" && onchainSettled.winningOutcome === 0) ||
-                            (p.side === "no" && onchainSettled.winningOutcome === 1);
-            if (userWon) {
-              settlementStatus = "won";
-              currentPrice = 100;
-            } else {
-              settlementStatus = "lost";
-              currentPrice = 0;
-            }
-          } else {
-            settlementStatus = "pending";
-            currentPrice = avgPrice;
-          }
+          poolAddress = onchainSettled.poolAddress || poolAddress;
+          marketId = onchainSettled.marketId || marketId;
+          settlementStatus = "pending";
+          currentPrice = avgPrice;
+        } else if (market && (market.closed || (market.expiry && Date.now() / 1000 > market.expiry))) {
+          // 4. Market is closed in feed, awaiting resolution
+          isSettled = true;
+          poolAddress = market.poolAddress || DREAMDEX_CONTRACTS.binaryMarketsModule;
+          marketId = market.marketId;
+          settlementStatus = "pending";
+          currentPrice = avgPrice;
         } else if (markets.length > 0) {
           isSettled = true;
           currentPrice = 0;
           settlementStatus = "lost";
         } else {
-          // Markets feed is still initializing — do not assume settled/lost prematurely
+          // Feed is still initializing
           isSettled = false;
           currentPrice = avgPrice;
         }
