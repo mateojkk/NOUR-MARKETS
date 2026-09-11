@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { Routes, Route, useNavigate, useLocation, Navigate } from "react-router-dom";
+import { Routes, Route, useNavigate, useLocation, useParams, Navigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { useEvmWallet } from "./contexts/EvmWalletContext";
 import LoginPage from "./components/LoginPage";
@@ -15,7 +15,7 @@ import MarketCard from "./components/MarketCard";
 import TradePage from "./components/TradePage";
 import ScrollToTop from "./components/ScrollToTop";
 import { ToastContainer, useToast } from "./components/Toast";
-import type { MarketGroup } from "./types";
+import type { Market, MarketGroup } from "./types";
 import { resolveMarketIcon } from "./types";
 
 import "./index.css";
@@ -169,12 +169,14 @@ function App() {
     return (
       <TradePageWrapper
         groupedMarkets={groupedMarkets}
+        markets={markets}
+        isLoading={isLoading}
         onOrderComplete={(success, message) => {
           addToast(success ? "success" : "error", message);
         }}
       />
     );
-  }, [groupedMarkets, addToast]);
+  }, [groupedMarkets, markets, isLoading, addToast]);
 
   // While the previous session is being restored, show a branded splash
   // instead of the login form — the URL is untouched, so once the session
@@ -328,31 +330,137 @@ function App() {
   );
 }
 
-// Wrapper for TradePage to retrieve group from state or find in groupedMarkets
+// Wrapper for TradePage to retrieve group from state or find matching active market
 function TradePageWrapper({
   groupedMarkets,
+  markets,
+  isLoading,
   onOrderComplete,
 }: {
   groupedMarkets: MarketGroup[];
+  markets: Market[];
+  isLoading: boolean;
   onOrderComplete: (success: boolean, message: string) => void;
 }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { ticker: rawTicker } = useParams<{ ticker: string }>();
 
-  const group: MarketGroup | undefined =
-    location.state?.group ||
-    groupedMarkets.find((g) =>
-      g.markets.some((m) => location.pathname.includes(encodeURIComponent(m.ticker))) ||
-      location.pathname.includes(encodeURIComponent(g.title))
-    ) ||
-    groupedMarkets[0];
+  const target = rawTicker ? decodeURIComponent(rawTicker).trim() : "";
+  const targetLower = target.toLowerCase();
+  const targetSuffix = target.split("-").pop()?.toLowerCase() || "";
+
+  // 1. Group from location.state if provided (e.g. from MarketCard or Portfolio "Trade More")
+  const stateGroup = location.state?.group as MarketGroup | undefined;
+
+  // 2. Resolve matching market group
+  const group = useMemo(() => {
+    // If stateGroup is provided, verify it actually matches target (or no target specified)
+    if (stateGroup && stateGroup.markets && stateGroup.markets.length > 0) {
+      if (!target) return stateGroup;
+      const stateMatches =
+        stateGroup.markets.some((m) =>
+          m.ticker.toLowerCase() === targetLower ||
+          m.ticker.toLowerCase().includes(targetLower) ||
+          targetLower.includes(m.ticker.toLowerCase()) ||
+          (m.marketId && targetSuffix && m.marketId.toLowerCase().endsWith(targetSuffix))
+        ) || stateGroup.title.toLowerCase() === targetLower;
+      if (stateMatches) return stateGroup;
+    }
+
+    if (!target) return groupedMarkets[0];
+
+    // Tier 1: Exact ticker match among active groups
+    let found = groupedMarkets.find((g) =>
+      g.markets.some((m) => m.ticker.toLowerCase() === targetLower) ||
+      (g.ticker && g.ticker.toLowerCase() === targetLower)
+    );
+    if (found) return found;
+
+    // Tier 2: Suffix or marketId match among active groups
+    found = groupedMarkets.find((g) =>
+      g.markets.some((m) => {
+        if (m.marketId && m.marketId.toLowerCase() === targetLower) return true;
+        if (targetSuffix && m.marketId && m.marketId.toLowerCase().endsWith(targetSuffix)) return true;
+        const mSuffix = m.ticker.split("-").pop()?.toLowerCase();
+        if (targetSuffix && mSuffix && targetSuffix === mSuffix) return true;
+        return false;
+      })
+    );
+    if (found) return found;
+
+    // Tier 3: Title match among active groups
+    found = groupedMarkets.find((g) =>
+      g.title.toLowerCase() === targetLower ||
+      g.markets.some((m) => m.title.toLowerCase() === targetLower)
+    );
+    if (found) return found;
+
+    // Tier 4: Asset & Duration match among active groups (e.g. BTC-60M or BTC-5M)
+    const asset = target.split("-")[0]?.toUpperCase();
+    const duration = target.split("-")[1]?.toUpperCase();
+
+    if (asset && asset.length >= 2) {
+      if (duration) {
+        found = groupedMarkets.find((g) =>
+          g.markets.some((m) =>
+            m.asset?.toUpperCase() === asset &&
+            m.ticker.toUpperCase().includes(duration)
+          )
+        );
+        if (found) return found;
+      }
+
+      // Tier 5: Any active market for the SAME asset (e.g. BTC -> active BTC market)
+      found = groupedMarkets.find((g) =>
+        g.markets.some((m) => m.asset?.toUpperCase() === asset)
+      );
+      if (found) return found;
+    }
+
+    // Tier 6: Look in ALL markets (including settled/finalized) so user can see their market
+    const anyMarket = markets.find((m) => {
+      if (m.ticker.toLowerCase() === targetLower) return true;
+      if (m.marketId && m.marketId.toLowerCase() === targetLower) return true;
+      if (targetSuffix && m.marketId && m.marketId.toLowerCase().endsWith(targetSuffix)) return true;
+      const mSuffix = m.ticker.split("-").pop()?.toLowerCase();
+      if (targetSuffix && mSuffix && targetSuffix === mSuffix) return true;
+      if (m.title.toLowerCase() === targetLower) return true;
+      return false;
+    });
+
+    if (anyMarket) {
+      return {
+        ticker: anyMarket.ticker,
+        title: anyMarket.title.trim(),
+        totalVolume: anyMarket.volume || 0,
+        markets: [anyMarket],
+        image: anyMarket.image || resolveMarketIcon(anyMarket.asset, anyMarket.title),
+      };
+    }
+
+    // NEVER return groupedMarkets[0] if a target was specified! Returning undefined prevents opening the wrong market.
+    return undefined;
+  }, [stateGroup, target, targetLower, targetSuffix, groupedMarkets, markets]);
+
+  if (isLoading && (!group || group.markets.length === 0)) {
+    return (
+      <div className="loading-center" style={{ padding: "80px 20px" }}>
+        <Loader2 size={32} className="animate-spin" style={{ color: "var(--accent, #10b981)", margin: "0 auto 12px" }} />
+        <p className="loading-text">Loading market details...</p>
+      </div>
+    );
+  }
 
   if (!group || group.markets.length === 0) {
     return (
       <div className="empty-state" style={{ padding: "60px 20px" }}>
         <h3>Market not found</h3>
+        <p style={{ color: "var(--text-muted)", marginTop: "8px" }}>
+          This market may have expired or is not currently active.
+        </p>
         <button onClick={() => navigate("/")} className="btn-yes" style={{ marginTop: "16px" }}>
-          Back to Markets
+          Explore Active Markets
         </button>
       </div>
     );

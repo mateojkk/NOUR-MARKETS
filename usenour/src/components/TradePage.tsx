@@ -38,7 +38,16 @@ const TradePage: React.FC<TradePageProps> = ({
 
   const initialMarket = useMemo(() => {
     if (routeTicker) {
-      const found = group.markets.find((m) => m.ticker === routeTicker);
+      const rtLower = routeTicker.toLowerCase();
+      const rtSuffix = routeTicker.split("-").pop()?.toLowerCase();
+      const found = group.markets.find((m) => {
+        if (m.ticker.toLowerCase() === rtLower) return true;
+        if (m.marketId?.toLowerCase() === rtLower) return true;
+        const mSuffix = m.ticker.split("-").pop()?.toLowerCase();
+        if (mSuffix && rtSuffix && mSuffix === rtSuffix) return true;
+        if (m.marketId && rtSuffix && m.marketId.toLowerCase().endsWith(rtSuffix)) return true;
+        return false;
+      });
       if (found) return found;
     }
     return group.markets[0] || ({} as Market);
@@ -47,10 +56,10 @@ const TradePage: React.FC<TradePageProps> = ({
   const [selectedMarket, setSelectedMarket] = useState<Market>(initialMarket);
 
   useEffect(() => {
-    if (initialMarket && initialMarket.ticker && initialMarket.ticker !== selectedMarket.ticker) {
+    if (initialMarket && initialMarket.ticker && initialMarket.ticker !== selectedMarket?.ticker) {
       setSelectedMarket(initialMarket);
     }
-  }, [initialMarket, selectedMarket.ticker]);
+  }, [initialMarket]);
 
   const [orderSide, setOrderSide] = useState<"yes" | "no">(urlSide || "yes");
   const [tradeAction, setTradeAction] = useState<"buy" | "sell">(urlAction || "buy");

@@ -24,7 +24,7 @@ import { useEvmWallet } from "../contexts/EvmWalletContext";
 import { getPositions, getStats, recordTrade, type PositionRecord, type UserStats } from "../services/userService";
 import { redeemWinningPosition, placeDreamDexOrder, DREAMDEX_CONTRACTS, SOMNIA_EXPLORER_URL } from "../services/dreamdex";
 import { useMarketData } from "../hooks/useMarketData";
-import { formatMarketTitle, resolveMarketIcon } from "../types";
+import { formatMarketTitle, resolveMarketIcon, type MarketGroup } from "../types";
 import TradeHistory from "./TradeHistory";
 import RankBadge from "./RankBadge";
 import "./Portfolio.css";
@@ -256,7 +256,7 @@ export default function Portfolio() {
         const pnlPercent = avgPrice > 0 ? ((currentPrice - avgPrice) / avgPrice) * 100 : 0;
 
         return {
-          ticker: p.ticker,
+          ticker: market?.ticker || p.ticker,
           title: p.title || market?.title || p.ticker,
           side: p.side as "yes" | "no",
           contracts,
@@ -389,6 +389,52 @@ export default function Portfolio() {
   };
 
   const handleTradeMore = (position: PortfolioPosition) => {
+    const pSuffix = position.ticker?.split("-").pop()?.toLowerCase();
+
+    // 1. Try to find the exact live market in the active feed
+    const liveMarket = markets.find((m) => {
+      if (m.ticker.toLowerCase() === position.ticker.toLowerCase()) return true;
+      if (position.marketId && m.marketId?.toLowerCase() === position.marketId.toLowerCase()) return true;
+      const mSuffix = m.ticker?.split("-").pop()?.toLowerCase();
+      if (pSuffix && mSuffix && pSuffix === mSuffix) return true;
+      return false;
+    });
+
+    if (liveMarket && !liveMarket.closed && liveMarket.active !== false) {
+      const group: MarketGroup = {
+        ticker: liveMarket.ticker,
+        title: liveMarket.title.trim(),
+        totalVolume: liveMarket.volume || 0,
+        markets: [liveMarket],
+        image: liveMarket.image || resolveMarketIcon(liveMarket.asset, liveMarket.title),
+      };
+      navigate(`/trade/${encodeURIComponent(liveMarket.ticker)}?action=buy&side=${position.side}`, {
+        state: { group },
+      });
+      return;
+    }
+
+    // 2. If this window ended, find the active market for the SAME asset (e.g. BTC -> active BTC market)
+    const asset = position.ticker?.split("-")[0]?.toUpperCase();
+    const activeAssetMarket = markets.find((m) =>
+      !m.closed && m.active !== false && m.asset?.toUpperCase() === asset
+    );
+
+    if (activeAssetMarket) {
+      const group: MarketGroup = {
+        ticker: activeAssetMarket.ticker,
+        title: activeAssetMarket.title.trim(),
+        totalVolume: activeAssetMarket.volume || 0,
+        markets: [activeAssetMarket],
+        image: activeAssetMarket.image || resolveMarketIcon(activeAssetMarket.asset, activeAssetMarket.title),
+      };
+      navigate(`/trade/${encodeURIComponent(activeAssetMarket.ticker)}?action=buy&side=${position.side}`, {
+        state: { group },
+      });
+      return;
+    }
+
+    // 3. Fallback
     navigate(`/trade/${encodeURIComponent(position.ticker)}?action=buy&side=${position.side}`);
   };
 
