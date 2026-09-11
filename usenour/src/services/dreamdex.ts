@@ -45,7 +45,7 @@ export const BINARY_MODULE_ABI = parseAbi([
 
 export const BINARY_POOL_ABI = parseAbi([
   "function placeBinaryOrder(uint8 side, uint256 price, uint256 quantity, uint64 expireNs, uint8 orderType) external returns (uint256 orderId)",
-  "function cancelOrder(uint256 orderId) external",
+  "function cancelOrder(uint128 orderId) external",
   "function getBookLevels(bool isBid) view returns (uint256[] prices, uint256[] quantities)",
   "function marketExpiryNs() view returns (uint64)",
 ]);
@@ -431,9 +431,16 @@ export async function placeDreamDexOrder({
       { gasLimit }
     );
     const receipt = await tx.wait();
+    let extractedOrderId = `order-${receipt.hash}`;
+    const BINARY_ORDER_PLACED = "0x74d63d9f1c4826854a227aa41c4a51723497a608aa14aa50e8153744f081d4e6";
+    const ORDER_RESTED = "0xd90f62f61ee2f606b132cfdfd883ddd079228b6fd6bffd9d7cf848daf824639d";
+    const log = receipt.logs.find((l: any) => l.topics[0] === BINARY_ORDER_PLACED || l.topics[0] === ORDER_RESTED);
+    if (log && log.topics[1]) {
+      extractedOrderId = BigInt(log.topics[1]).toString();
+    }
     return {
       txHash: receipt.hash,
-      orderId: `order-${receipt.hash}`,
+      orderId: extractedOrderId,
     };
   } catch (err: any) {
     if (err?.code === "ACTION_REJECTED" || err?.message?.includes("user rejected") || err?.message?.includes("User rejected")) {
@@ -578,4 +585,55 @@ export async function redeemWinningPosition(
   );
   const receipt = await tx.wait();
   return receipt.hash;
+}
+
+// 6. Cancel Open / Resting Limit Order on CLOB (100% Collateral Refund)
+export async function cancelDreamDexOrder(
+  walletProvider: any,
+  poolAddress: string,
+  orderId: string | bigint
+): Promise<string> {
+  const { ethers } = await import("ethers");
+  const safePoolAddress = ethers.getAddress(poolAddress.toLowerCase());
+  const provider = new ethers.BrowserProvider(walletProvider);
+  const signer = await provider.getSigner();
+
+  const poolContract = new ethers.Contract(
+    safePoolAddress,
+    ["function cancelOrder(uint128 orderId) external"],
+    signer
+  );
+
+  let gasLimit = 500000n;
+  try {
+    const est = await poolContract.cancelOrder.estimateGas(BigInt(orderId));
+    gasLimit = (est * 130n) / 100n;
+  } catch (estErr) {
+    console.warn("cancelOrder gas estimation fallback to 500k:", estErr);
+  }
+
+  const tx = await poolContract.cancelOrder(BigInt(orderId), { gasLimit });
+  const receipt = await tx.wait();
+  return receipt.hash;
+}
+
+// 7. Extract real on-chain orderId from a placement transaction receipt
+export async function getOrderIdFromTx(txHash: string): Promise<string | null> {
+  const { ethers } = await import("ethers");
+  const provider = new ethers.JsonRpcProvider(SOMNIA_RPC_URL);
+  const BINARY_ORDER_PLACED = "0x74d63d9f1c4826854a227aa41c4a51723497a608aa14aa50e8153744f081d4e6";
+  const ORDER_RESTED = "0xd90f62f61ee2f606b132cfdfd883ddd079228b6fd6bffd9d7cf848daf824639d";
+  try {
+    const receipt = await provider.getTransactionReceipt(txHash);
+    if (!receipt) return null;
+    const log = receipt.logs.find(
+      (l) => l.topics[0] === BINARY_ORDER_PLACED || l.topics[0] === ORDER_RESTED
+    );
+    if (log && log.topics[1]) {
+      return BigInt(log.topics[1]).toString();
+    }
+  } catch (err) {
+    console.error("Failed to extract orderId from tx:", err);
+  }
+  return null;
 }

@@ -1191,3 +1191,96 @@
   border-radius: 12px;
   margin-left: 4px;
 }
+
+/* Resting Limit Order & Collateral Escrow UI */
+.position-badges-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.position-resting-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  text-transform: uppercase;
+}
+
+.position-action-btn.cancel-order-action-btn {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.position-action-btn.cancel-order-action-btn:hover {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: rgba(245, 158, 11, 0.55);
+  color: #fbbf24;
+}
+
+.text-warning {
+  color: #f59e0b !important;
+}
+
+.close-modal-resting-banner {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.resting-banner-icon {
+  color: #f59e0b;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.resting-banner-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.resting-banner-heading {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f59e0b;
+}
+
+.resting-banner-text {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.resting-banner-text strong {
+  color: var(--text);
+}
+
+.close-modal-proceeds-box.resting-proceeds {
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.close-modal-proceeds-box.resting-proceeds .proceeds-row.highlight {
+  border-top: 1px dashed rgba(245, 158, 11, 0.3);
+}
+
+.modal-confirm-btn.cancel-resting-btn {
+  background: #d97706;
+}
+
+.modal-confirm-btn.cancel-resting-btn:hover:not(:disabled) {
+  background: #b45309;
+}
+

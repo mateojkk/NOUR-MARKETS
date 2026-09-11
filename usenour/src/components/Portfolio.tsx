@@ -21,8 +21,15 @@ import {
   Loader2,
 } from "lucide-react";
 import { useEvmWallet } from "../contexts/EvmWalletContext";
-import { getPositions, getStats, recordTrade, type PositionRecord, type UserStats } from "../services/userService";
-import { redeemWinningPosition, placeDreamDexOrder, DREAMDEX_CONTRACTS, SOMNIA_EXPLORER_URL } from "../services/dreamdex";
+import { getPositions, getStats, recordTrade, getTrades, type PositionRecord, type UserStats } from "../services/userService";
+import {
+  redeemWinningPosition,
+  placeDreamDexOrder,
+  cancelDreamDexOrder,
+  getOrderIdFromTx,
+  DREAMDEX_CONTRACTS,
+  SOMNIA_EXPLORER_URL,
+} from "../services/dreamdex";
 import { useMarketData } from "../hooks/useMarketData";
 import { formatMarketTitle, resolveMarketIcon, type MarketGroup } from "../types";
 import TradeHistory from "./TradeHistory";
@@ -56,6 +63,10 @@ interface PortfolioPosition {
   settlementStatus?: "won" | "lost" | "refunded" | "pending";
   resolvedOutcome?: "UP" | "DOWN";
   isRefunded?: boolean;
+  isRested?: boolean;
+  orderId?: string;
+  txSignature?: string;
+  contractsHeldOnchain?: number;
 }
 
 interface BatchSettledResult {
@@ -226,7 +237,10 @@ export default function Portfolio() {
     try {
       await refreshBalance();
 
-      const backendPositionsRaw = await getPositions(walletAddress);
+      const [backendPositionsRaw, userTrades] = await Promise.all([
+        getPositions(walletAddress),
+        getTrades(walletAddress).catch(() => []),
+      ]);
       const backendPositions: PositionRecord[] = Array.isArray(backendPositionsRaw)
         ? backendPositionsRaw
         : Array.isArray((backendPositionsRaw as any)?.positions)
@@ -350,6 +364,12 @@ export default function Portfolio() {
           : undefined;
 
         const isRefunded = settlementStatus === "refunded";
+        const isRested = !isSettled && heldTokens === 0;
+        const matchingTrade = userTrades.find(
+          (t) => t.ticker.toLowerCase() === p.ticker.toLowerCase() && t.side === p.side && t.action === "buy"
+        );
+        const txSignature = matchingTrade?.tx_signature;
+
         const pnl = isRefunded ? 0 : ((currentPrice - avgPrice) * contracts) / 100;
         const pnlPercent = isRefunded || avgPrice === 0 ? 0 : ((currentPrice - avgPrice) / avgPrice) * 100;
 
@@ -369,6 +389,9 @@ export default function Portfolio() {
           settlementStatus,
           resolvedOutcome,
           isRefunded,
+          isRested,
+          txSignature,
+          contractsHeldOnchain: heldTokens,
         };
       });
 
@@ -416,19 +439,20 @@ export default function Portfolio() {
     setCloseError(null);
     setCloseSuccess(null);
     setClosingStatus(null);
+
+    // Pre-fetch orderId if resting order
+    if (position.isRested && !position.orderId && position.txSignature) {
+      getOrderIdFromTx(position.txSignature).then((id) => {
+        if (id) {
+          setPositionToClose((prev) => (prev ? { ...prev, orderId: id } : null));
+        }
+      }).catch(() => {});
+    }
   };
 
   const handleConfirmClose = async () => {
     const activePos = activePositionToClose;
     if (!walletProvider || !activePos || !walletAddress) return;
-    if (closeShares <= 0 || closeShares > activePos.contracts) {
-      setCloseError(`Please enter a valid contract amount (1 to ${activePos.contracts})`);
-      return;
-    }
-
-    setClosingStatus("Authorizing tokens & placing sell order...");
-    setCloseError(null);
-    setCloseSuccess(null);
 
     if (activePos.isSettled) {
       setClosingStatus(null);
@@ -442,6 +466,82 @@ export default function Portfolio() {
       setCloseError("This position's market does not have an active binary pool address on Somnia.");
       return;
     }
+
+    const isRestingOrder = (activePos.isRested || activePos.contractsHeldOnchain === 0) && !activePos.isSettled;
+
+    // Handle Resting Limit Order Cancellation (100% Collateral Refund)
+    if (isRestingOrder) {
+      setClosingStatus("Cancelling resting order & refunding collateral on Somnia...");
+      setCloseError(null);
+      setCloseSuccess(null);
+
+      try {
+        let orderId: string | null | undefined = activePos.orderId;
+        if (!orderId && activePos.txSignature) {
+          orderId = await getOrderIdFromTx(activePos.txSignature);
+        }
+        if (!orderId) {
+          const latestTrades = await getTrades(walletAddress).catch(() => []);
+          const trade = latestTrades.find(
+            (t) => t.ticker.toLowerCase() === activePos.ticker.toLowerCase() && t.side === activePos.side && t.action === "buy" && t.tx_signature
+          );
+          if (trade?.tx_signature) {
+            orderId = await getOrderIdFromTx(trade.tx_signature);
+          }
+        }
+
+        if (!orderId) {
+          throw new Error("Could not find on-chain order ID for this resting order. The order may have already been cancelled or expired.");
+        }
+
+        const cancelTxHash = await cancelDreamDexOrder(walletProvider, pool, orderId);
+
+        const refundAmount = (activePos.contracts * activePos.avgPrice) / 100;
+
+        await recordTrade(walletAddress, {
+          ticker: activePos.ticker,
+          title: activePos.title,
+          side: activePos.side,
+          action: "sell",
+          amount: activePos.contracts,
+          price: activePos.avgPrice,
+          total_cost: refundAmount,
+          platform: "dreamdex",
+          tx_signature: cancelTxHash,
+          platform_fee: 0,
+          pnl: 0,
+        }).catch(() => {});
+
+        setClosingStatus(null);
+        setCloseSuccess(`Order cancelled! $${refundAmount.toFixed(2)} tUSDC refunded to your wallet.`);
+        addToast("success", `Order cancelled! $${refundAmount.toFixed(2)} tUSDC returned to your wallet.`);
+
+        await refreshBalance();
+        await fetchPortfolio();
+
+        setTimeout(() => {
+          setPositionToClose(null);
+          setCloseSuccess(null);
+        }, 1600);
+        return;
+      } catch (err: any) {
+        console.error("Cancel resting order error:", err);
+        setClosingStatus(null);
+        setCloseError(err?.reason || err?.message || "Failed to cancel order on Somnia");
+        return;
+      }
+    }
+
+    // Handle Active Holding Token Position Sale
+    if (closeShares <= 0 || closeShares > activePos.contracts) {
+      setCloseError(`Please enter a valid contract amount (1 to ${activePos.contracts})`);
+      return;
+    }
+
+    setClosingStatus("Authorizing tokens & placing sell order...");
+    setCloseError(null);
+    setCloseSuccess(null);
+
     const priceProb = activePos.currentPrice / 100;
 
     try {
@@ -779,9 +879,16 @@ export default function Portfolio() {
                         </div>
                       </div>
 
-                      <span className={`position-side-badge ${position.side}`}>
-                        {position.side === "yes" ? "UP (YES)" : "DOWN (NO)"}
-                      </span>
+                      <div className="position-badges-group">
+                        <span className={`position-side-badge ${position.side}`}>
+                          {position.side === "yes" ? "UP (YES)" : "DOWN (NO)"}
+                        </span>
+                        {position.isRested && (
+                          <span className="position-resting-badge">
+                            RESTING ORDER
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="position-metrics-grid">
@@ -790,7 +897,7 @@ export default function Portfolio() {
                         <span className="m-val">{position.contracts.toLocaleString()}</span>
                       </div>
                       <div className="metric-box">
-                        <span className="m-label">Avg Entry Price</span>
+                        <span className="m-label">{position.isRested ? "Order Limit Price" : "Avg Entry Price"}</span>
                         <span className="m-val">{position.avgPrice.toFixed(1)}¢</span>
                       </div>
                       <div className="metric-box">
@@ -798,20 +905,26 @@ export default function Portfolio() {
                         <span className="m-val">{position.currentPrice.toFixed(1)}¢</span>
                       </div>
                       <div className="metric-box">
-                        <span className="m-label">Unrealized P&L</span>
-                        <span className={`m-val ${position.pnl >= 0 ? "text-success" : "text-danger"}`}>
-                          {position.pnl >= 0 ? "+" : ""}${position.pnl.toFixed(2)} ({position.pnlPercent >= 0 ? "+" : ""}{position.pnlPercent.toFixed(1)}%)
-                        </span>
+                        <span className="m-label">{position.isRested ? "Escrow Collateral" : "Unrealized P&L"}</span>
+                        {position.isRested ? (
+                          <span className="m-val text-warning">
+                            ${((position.contracts * position.avgPrice) / 100).toFixed(2)} (Resting)
+                          </span>
+                        ) : (
+                          <span className={`m-val ${position.pnl >= 0 ? "text-success" : "text-danger"}`}>
+                            {position.pnl >= 0 ? "+" : ""}${position.pnl.toFixed(2)} ({position.pnlPercent >= 0 ? "+" : ""}{position.pnlPercent.toFixed(1)}%)
+                          </span>
+                        )}
                       </div>
                     </div>
 
                     <div className="position-footer-actions">
                       <button
-                        className="position-action-btn close-btn"
+                        className={`position-action-btn ${position.isRested ? "cancel-order-action-btn" : "close-btn"}`}
                         onClick={() => handleOpenCloseModal(position)}
                       >
                         <XCircle size={14} />
-                        <span>Close Position</span>
+                        <span>{position.isRested ? "Cancel Order" : "Close Position"}</span>
                       </button>
                       <button className="position-action-btn primary" onClick={() => handleTradeMore(position)}>
                         <span>Trade More</span>
@@ -990,8 +1103,8 @@ export default function Portfolio() {
           <div className="close-modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="close-modal-header">
               <h3 className="close-modal-title">
-                <XCircle size={18} className="text-danger" />
-                <span>Close Position</span>
+                <XCircle size={18} className={activePositionToClose.isRested ? "text-warning" : "text-danger"} />
+                <span>{activePositionToClose.isRested ? "Cancel Resting Order" : "Close Position"}</span>
               </h3>
               <button
                 className="close-modal-close-btn"
@@ -1011,79 +1124,112 @@ export default function Portfolio() {
               </div>
               <div className="close-modal-stats-grid">
                 <div className="close-modal-stat-item">
-                  <span className="close-modal-stat-label">Contracts Held</span>
+                  <span className="close-modal-stat-label">{activePositionToClose.isRested ? "Order Contracts" : "Contracts Held"}</span>
                   <span className="close-modal-stat-value">{activePositionToClose.contracts.toLocaleString()}</span>
                 </div>
                 <div className="close-modal-stat-item">
-                  <span className="close-modal-stat-label">Entry Avg</span>
+                  <span className="close-modal-stat-label">{activePositionToClose.isRested ? "Order Price" : "Entry Avg"}</span>
                   <span className="close-modal-stat-value">{activePositionToClose.avgPrice.toFixed(1)}¢</span>
                 </div>
                 <div className="close-modal-stat-item">
-                  <span className="close-modal-stat-label">Current Price</span>
+                  <span className="close-modal-stat-label">Current Mark</span>
                   <span className="close-modal-stat-value">{activePositionToClose.currentPrice.toFixed(1)}¢</span>
                 </div>
               </div>
             </div>
 
-            <div className="close-modal-shares-section">
-              <div className="close-modal-shares-header">
-                <span>Contracts to Close</span>
-                <span>Max: {activePositionToClose.contracts}</span>
-              </div>
-              <div className="close-modal-input-wrap">
-                <input
-                  type="number"
-                  min="1"
-                  max={activePositionToClose.contracts}
-                  value={closeShares || ""}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value, 10);
-                    setCloseShares(isNaN(val) ? 0 : Math.min(val, activePositionToClose.contracts));
-                  }}
-                  className="close-modal-input"
-                  placeholder="0"
-                />
-                <span className="close-modal-input-unit">contracts</span>
-              </div>
-              <div className="percent-chips-row">
-                {[25, 50, 75, 100].map((pct) => {
-                  const targetVal = pct === 100
-                    ? activePositionToClose.contracts
-                    : Math.max(1, Math.floor(activePositionToClose.contracts * (pct / 100)));
-                  const isActive = closeShares === targetVal;
-                  return (
-                    <button
-                      key={pct}
-                      type="button"
-                      className={`percent-chip ${isActive ? "active" : ""}`}
-                      onClick={() => setCloseShares(targetVal)}
-                    >
-                      {pct === 100 ? "100% (All)" : `${pct}%`}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Financial Proceeds Breakdown */}
-            {(() => {
-              const net = (closeShares * activePositionToClose.currentPrice) / 100;
-              const estPnl = ((activePositionToClose.currentPrice - activePositionToClose.avgPrice) * closeShares) / 100;
-              return (
-                <div className="close-modal-proceeds-box">
-                  <div className="proceeds-row">
-                    <span>Estimated Realized P&L:</span>
-                    <span className={estPnl >= 0 ? "text-success" : "text-danger"}>
-                      {estPnl >= 0 ? "+" : ""}${estPnl.toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="proceeds-row highlight">
-                    <span>Net Payout to Receive:</span>
-                    <span className="proceeds-value-large">${net.toFixed(2)} tUSDC</span>
+            {activePositionToClose.isRested && (
+              <div className="close-modal-resting-banner">
+                <AlertCircle size={18} className="resting-banner-icon" />
+                <div className="resting-banner-content">
+                  <div className="resting-banner-heading">Unfilled Limit Order (Escrowed)</div>
+                  <div className="resting-banner-text">
+                    This order is currently resting on the Somnia order book. Cancelling will withdraw the order on-chain and refund <strong>100% of your collateral (${((activePositionToClose.contracts * activePositionToClose.avgPrice) / 100).toFixed(2)} tUSDC)</strong> directly to your wallet.
                   </div>
                 </div>
-              );
-            })()}
+              </div>
+            )}
+
+            {!activePositionToClose.isRested && (
+              <div className="close-modal-shares-section">
+                <div className="close-modal-shares-header">
+                  <span>Contracts to Close</span>
+                  <span>Max: {activePositionToClose.contracts}</span>
+                </div>
+                <div className="close-modal-input-wrap">
+                  <input
+                    type="number"
+                    min="1"
+                    max={activePositionToClose.contracts}
+                    value={closeShares || ""}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      setCloseShares(isNaN(val) ? 0 : Math.min(val, activePositionToClose.contracts));
+                    }}
+                    className="close-modal-input"
+                    placeholder="0"
+                  />
+                  <span className="close-modal-input-unit">contracts</span>
+                </div>
+                <div className="percent-chips-row">
+                  {[25, 50, 75, 100].map((pct) => {
+                    const targetVal = pct === 100
+                      ? activePositionToClose.contracts
+                      : Math.max(1, Math.floor(activePositionToClose.contracts * (pct / 100)));
+                    const isActive = closeShares === targetVal;
+                    return (
+                      <button
+                        key={pct}
+                        type="button"
+                        className={`percent-chip ${isActive ? "active" : ""}`}
+                        onClick={() => setCloseShares(targetVal)}
+                      >
+                        {pct === 100 ? "100% (All)" : `${pct}%`}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Financial Proceeds Breakdown */}
+            {activePositionToClose.isRested ? (
+              <div className="close-modal-proceeds-box resting-proceeds">
+                <div className="proceeds-row">
+                  <span>Collateral in Escrow:</span>
+                  <span>${((activePositionToClose.contracts * activePositionToClose.avgPrice) / 100).toFixed(2)} tUSDC</span>
+                </div>
+                <div className="proceeds-row">
+                  <span>Realized P&L:</span>
+                  <span>$0.00 (Collateral Returned)</span>
+                </div>
+                <div className="proceeds-row highlight">
+                  <span>Net Refund to Receive:</span>
+                  <span className="proceeds-value-large text-warning">
+                    ${((activePositionToClose.contracts * activePositionToClose.avgPrice) / 100).toFixed(2)} tUSDC
+                  </span>
+                </div>
+              </div>
+            ) : (
+              (() => {
+                const net = (closeShares * activePositionToClose.currentPrice) / 100;
+                const estPnl = ((activePositionToClose.currentPrice - activePositionToClose.avgPrice) * closeShares) / 100;
+                return (
+                  <div className="close-modal-proceeds-box">
+                    <div className="proceeds-row">
+                      <span>Estimated Realized P&L:</span>
+                      <span className={estPnl >= 0 ? "text-success" : "text-danger"}>
+                        {estPnl >= 0 ? "+" : ""}${estPnl.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="proceeds-row highlight">
+                      <span>Net Payout to Receive:</span>
+                      <span className="proceeds-value-large">${net.toFixed(2)} tUSDC</span>
+                    </div>
+                  </div>
+                );
+              })()
+            )}
 
             {closeError && (
               <div className="close-modal-feedback error">
@@ -1106,19 +1252,23 @@ export default function Portfolio() {
                 onClick={() => setPositionToClose(null)}
                 disabled={!!closingStatus}
               >
-                Cancel
+                Back
               </button>
               <button
                 type="button"
-                className="modal-confirm-btn"
+                className={`modal-confirm-btn ${activePositionToClose.isRested ? "cancel-resting-btn" : ""}`}
                 onClick={handleConfirmClose}
-                disabled={!!closingStatus || closeShares <= 0 || closeShares > activePositionToClose.contracts}
+                disabled={!!closingStatus || (!activePositionToClose.isRested && (closeShares <= 0 || closeShares > activePositionToClose.contracts))}
               >
                 {closingStatus ? (
                   <>
                     <Loader2 size={16} className="spinning" />
                     <span>{closingStatus}</span>
                   </>
+                ) : activePositionToClose.isRested ? (
+                  <span>
+                    Cancel Order · Refund ${((activePositionToClose.contracts * activePositionToClose.avgPrice) / 100).toFixed(2)} tUSDC
+                  </span>
                 ) : (
                   <span>
                     Confirm Close · Payout ${((closeShares * activePositionToClose.currentPrice) / 100).toFixed(2)} tUSDC
