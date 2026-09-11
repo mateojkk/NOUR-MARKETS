@@ -3,20 +3,40 @@ import { ArrowDownToLine, ArrowUpFromLine, Copy, Check, X, Loader2, Droplets } f
 import { useEvmWallet } from "../contexts/EvmWalletContext";
 import { ethers, parseUnits } from "ethers";
 import { DREAMDEX_CONTRACTS } from "../services/dreamdex";
+import { recordTransfer } from "../services/transferService";
 import "./WalletActions.css";
+
+export type WalletModalType = "deposit" | "withdraw" | null;
 
 interface WalletActionsProps {
   walletAddress: string;
   usdcBalance: number;
   onTransactionComplete: () => void;
   executeGasless?: (txs: Array<{ to: string; data: string; value: string }>, desc: string) => Promise<any>;
+  modalOpen?: WalletModalType;
+  onModalClose?: () => void;
+  showButtons?: boolean;
 }
 
-type ModalType = "deposit" | "withdraw" | null;
-
-export default function WalletActions({ walletAddress, usdcBalance, onTransactionComplete }: WalletActionsProps) {
+export default function WalletActions({
+  walletAddress,
+  usdcBalance,
+  onTransactionComplete,
+  modalOpen,
+  onModalClose,
+  showButtons = true,
+}: WalletActionsProps) {
   const { walletProvider, claimFaucet, refreshBalance } = useEvmWallet();
-  const [activeModal, setActiveModal] = useState<ModalType>(null);
+  const [internalModal, setInternalModal] = useState<WalletModalType>(null);
+  const activeModal = modalOpen !== undefined ? modalOpen : internalModal;
+  const setActiveModal = (type: WalletModalType) => {
+    if (modalOpen !== undefined) {
+      if (!type && onModalClose) onModalClose();
+    } else {
+      setInternalModal(type);
+    }
+  };
+
   const [copied, setCopied] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [claimSuccess, setClaimSuccess] = useState(false);
@@ -101,6 +121,18 @@ export default function WalletActions({ walletAddress, usdcBalance, onTransactio
       const tx = await contract.transfer(recipient, parsedAmount);
       setTxHash(tx.hash);
       await tx.wait();
+      recordTransfer(walletAddress, {
+        type: "withdrawal",
+        subtype: "transfer",
+        amount: withdrawAmount,
+        token: "tUSDC",
+        txHash: tx.hash,
+        fromAddress: walletAddress,
+        toAddress: recipient,
+        timestamp: new Date().toISOString(),
+        status: "completed",
+        note: `Sent to ${recipient.slice(0, 6)}...${recipient.slice(-4)}`,
+      });
       await refreshBalance();
       onTransactionComplete();
     } catch (err: any) {
@@ -113,23 +145,25 @@ export default function WalletActions({ walletAddress, usdcBalance, onTransactio
 
   return (
     <>
-      <div className="wallet-actions">
-        <button
-          className="wallet-action-btn deposit"
-          onClick={() => setActiveModal("deposit")}
-        >
-          <ArrowDownToLine size={16} />
-          <span>Deposit</span>
-        </button>
+      {showButtons && (
+        <div className="wallet-actions">
+          <button
+            className="wallet-action-btn deposit"
+            onClick={() => setActiveModal("deposit")}
+          >
+            <ArrowDownToLine size={16} />
+            <span>Deposit</span>
+          </button>
 
-        <button
-          className="wallet-action-btn withdraw"
-          onClick={() => setActiveModal("withdraw")}
-        >
-          <ArrowUpFromLine size={16} />
-          <span>Withdraw</span>
-        </button>
-      </div>
+          <button
+            className="wallet-action-btn withdraw"
+            onClick={() => setActiveModal("withdraw")}
+          >
+            <ArrowUpFromLine size={16} />
+            <span>Withdraw</span>
+          </button>
+        </div>
+      )}
 
       {/* Deposit Modal */}
       {activeModal === "deposit" && (

@@ -2,7 +2,8 @@ import React, { createContext, useContext, useEffect, useMemo, useState, useCall
 import { useAccount, useDisconnect, useConnect } from "wagmi";
 import { Magic } from "magic-sdk";
 import { clearAuthToken, getAuthToken, setAuthToken, syncBackendSession, deleteBackendSession } from "../services/auth";
-import { getCollateralBalance, claimTestnetFaucet } from "../services/dreamdex";
+import { getCollateralBalance, claimTestnetFaucet, DREAMDEX_CONTRACTS } from "../services/dreamdex";
+import { recordTransfer } from "../services/transferService";
 
 const MAGIC_KEY = import.meta.env.VITE_MAGIC_PUBLISHABLE_KEY?.trim();
 const SOMNIA_RPC = import.meta.env.VITE_SOMNIA_RPC_URL || "https://50312.rpc.thirdweb.com";
@@ -387,6 +388,18 @@ export const EvmWalletProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (!p) throw new Error("No active wallet provider found. Please connect MetaMask or log in.");
 
     const tx = await claimTestnetFaucet(p, 1000);
+    recordTransfer(address, {
+      type: "deposit",
+      subtype: "faucet",
+      amount: 1000,
+      token: "tUSDC",
+      txHash: tx,
+      fromAddress: DREAMDEX_CONTRACTS.collateral,
+      toAddress: address,
+      timestamp: new Date().toISOString(),
+      status: "completed",
+      note: "Somnia Shannon Testnet Faucet",
+    });
     await refreshBalance();
     return tx;
   }, [address, walletProvider, connector, refreshBalance]);

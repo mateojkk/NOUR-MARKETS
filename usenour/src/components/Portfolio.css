@@ -1284,3 +1284,97 @@
   background: #b45309;
 }
 
+/* Portfolio Header & Stat Card Action Buttons (Deposit & Withdraw) */
+.portfolio-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.portfolio-action-btn-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: var(--font-sans);
+}
+
+.portfolio-action-btn-header.deposit {
+  background: var(--primary);
+  color: var(--text-inverse);
+  border: none;
+}
+
+.portfolio-action-btn-header.deposit:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+}
+
+.portfolio-action-btn-header.withdraw {
+  background: var(--bg-panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.portfolio-action-btn-header.withdraw:hover {
+  background: var(--bg-alt);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.stat-card-footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.stat-card-action-btns {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stat-card-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: var(--font-sans);
+}
+
+.stat-card-action-btn.deposit {
+  background: rgba(94, 174, 139, 0.15);
+  color: var(--yes-color);
+  border: 1px solid rgba(94, 174, 139, 0.35);
+}
+
+.stat-card-action-btn.deposit:hover {
+  background: rgba(94, 174, 139, 0.28);
+  border-color: var(--yes-color);
+}
+
+.stat-card-action-btn.withdraw {
+  background: var(--bg-alt);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.stat-card-action-btn.withdraw:hover {
+  background: var(--border);
+  color: var(--primary);
+}
+
+

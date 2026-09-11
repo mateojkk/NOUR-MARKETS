@@ -15,6 +15,9 @@ import {
   TrendingDown,
   Activity,
   ArrowUpRight,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  ArrowDownUp,
   XCircle,
   X,
   AlertCircle,
@@ -33,6 +36,8 @@ import {
 import { useMarketData } from "../hooks/useMarketData";
 import { formatMarketTitle, resolveMarketIcon, type MarketGroup } from "../types";
 import TradeHistory from "./TradeHistory";
+import TransferHistory from "./TransferHistory";
+import WalletActions, { type WalletModalType } from "./WalletActions";
 import RankBadge from "./RankBadge";
 import { useToast, ToastContainer } from "./Toast";
 import "./Portfolio.css";
@@ -168,7 +173,7 @@ async function fetchBatchSettledMarkets(ids: string[], userAddress?: string): Pr
   return { settledMap, userOutcomeMap };
 }
 
-type TabType = "positions" | "closed" | "history" | "stats";
+type TabType = "positions" | "closed" | "history" | "transfers" | "stats";
 
 export default function Portfolio() {
   const navigate = useNavigate();
@@ -221,6 +226,7 @@ export default function Portfolio() {
   const [closeError, setCloseError] = useState<string | null>(null);
   const [closeSuccess, setCloseSuccess] = useState<string | null>(null);
   const [copiedAddress, setCopiedAddress] = useState(false);
+  const [walletModal, setWalletModal] = useState<WalletModalType>(null);
 
   // Derive active position to keep modal price and P&L reactive to live market feed ticks
   const activePositionToClose = useMemo(() => {
@@ -717,13 +723,31 @@ export default function Portfolio() {
           </div>
         </div>
 
-        <button
-          className={`refresh-btn ${loading ? "spinning" : ""}`}
-          onClick={fetchPortfolio}
-          title="Refresh balances & positions"
-        >
-          <RefreshCw size={16} />
-        </button>
+        <div className="portfolio-header-actions">
+          <button
+            className="portfolio-action-btn-header deposit"
+            onClick={() => setWalletModal("deposit")}
+            title="Deposit collateral / claim faucet"
+          >
+            <ArrowDownToLine size={14} />
+            <span>Deposit</span>
+          </button>
+          <button
+            className="portfolio-action-btn-header withdraw"
+            onClick={() => setWalletModal("withdraw")}
+            title="Withdraw tUSDC to external address"
+          >
+            <ArrowUpFromLine size={14} />
+            <span>Withdraw</span>
+          </button>
+          <button
+            className={`refresh-btn ${loading ? "spinning" : ""}`}
+            onClick={fetchPortfolio}
+            title="Refresh balances & positions"
+          >
+            <RefreshCw size={16} />
+          </button>
+        </div>
       </div>
 
       {/* Metric Summary Cards */}
@@ -736,7 +760,27 @@ export default function Portfolio() {
             ${collateralBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             <span className="unit">tUSDC</span>
           </div>
-          <div className="stat-hint">Available trading collateral</div>
+          <div className="stat-card-footer-row">
+            <div className="stat-hint">Available trading collateral</div>
+            <div className="stat-card-action-btns">
+              <button
+                className="stat-card-action-btn deposit"
+                onClick={() => setWalletModal("deposit")}
+                title="Deposit / Claim Faucet"
+              >
+                <ArrowDownToLine size={12} />
+                <span>Deposit</span>
+              </button>
+              <button
+                className="stat-card-action-btn withdraw"
+                onClick={() => setWalletModal("withdraw")}
+                title="Withdraw tUSDC"
+              >
+                <ArrowUpFromLine size={12} />
+                <span>Withdraw</span>
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="stat-card">
@@ -833,6 +877,14 @@ export default function Portfolio() {
         >
           <History size={15} />
           <span>Trade History</span>
+        </button>
+
+        <button
+          className={`tab-btn ${activeTab === "transfers" ? "active" : ""}`}
+          onClick={() => handleTabChange("transfers")}
+        >
+          <ArrowDownUp size={15} />
+          <span>Transfers</span>
         </button>
 
         <button
@@ -1044,7 +1096,19 @@ export default function Portfolio() {
         </div>
       )}
 
-      {/* Tab 3: Performance & Stats */}
+      {/* Tab 3: Transfers (Deposits & Withdrawals) */}
+      {activeTab === "transfers" && (
+        <div className="tab-pane">
+          <TransferHistory
+            walletAddress={walletAddress}
+            collateralBalance={collateralBalance}
+            onOpenDeposit={() => setWalletModal("deposit")}
+            onOpenWithdraw={() => setWalletModal("withdraw")}
+          />
+        </div>
+      )}
+
+      {/* Tab 4: Performance & Stats */}
       {activeTab === "stats" && (
         <div className="tab-pane">
           <div className="performance-card">
@@ -1278,6 +1342,18 @@ export default function Portfolio() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Wallet Actions (Deposit & Withdraw Modals) */}
+      {walletAddress && (
+        <WalletActions
+          walletAddress={walletAddress}
+          usdcBalance={collateralBalance}
+          onTransactionComplete={fetchPortfolio}
+          modalOpen={walletModal}
+          onModalClose={() => setWalletModal(null)}
+          showButtons={false}
+        />
       )}
 
       <ToastContainer toasts={toasts} onRemove={removeToast} />

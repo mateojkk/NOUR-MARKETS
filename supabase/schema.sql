@@ -83,13 +83,39 @@ CREATE TABLE IF NOT EXISTS public.watchlist (
     PRIMARY KEY (wallet_address, market_id)
 );
 
--- 6. ROW LEVEL SECURITY (RLS) POLICIES
+-- 6. TRANSFERS TABLE
+-- Tracks on-chain deposits (faucets/funding) and withdrawals (transfers out)
+CREATE TABLE IF NOT EXISTS public.transfers (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    wallet_address TEXT NOT NULL REFERENCES public.users(wallet_address) ON DELETE CASCADE,
+    type TEXT NOT NULL CHECK (type IN ('deposit', 'withdrawal')),
+    subtype TEXT DEFAULT 'transfer',
+    amount NUMERIC NOT NULL,
+    token TEXT DEFAULT 'tUSDC' NOT NULL,
+    tx_hash TEXT,
+    from_address TEXT,
+    to_address TEXT,
+    status TEXT DEFAULT 'completed' NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc', NOW()) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_transfers_wallet ON public.transfers (wallet_address, created_at DESC);
+
+-- 7. ROW LEVEL SECURITY (RLS) POLICIES
 -- Enable RLS on all tables
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.trades ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.positions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.watchlist ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.transfers ENABLE ROW LEVEL SECURITY;
+
+-- Allow public read access to transfers
+CREATE POLICY "Transfers viewable by everyone"
+    ON public.transfers FOR SELECT USING (true);
+
+CREATE POLICY "Transfers insertable by users"
+    ON public.transfers FOR INSERT WITH CHECK (true);
 
 -- Allow public read access to profiles
 CREATE POLICY "Public profiles are viewable by everyone" 
