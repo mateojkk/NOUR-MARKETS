@@ -89,46 +89,12 @@ export async function updateProfile(
   }
 }
 
+import { getSupabaseClient } from "./supabaseClient";
+
 // =============================================================================
-// Trades API
+// Trades API (Database-backed via Supabase)
 // =============================================================================
 
-// Local fallback: in local dev there is no backend behind /api/user/*, so
-// trades are mirrored into localStorage to keep the dashboard functional.
-const LOCAL_TRADES_PREFIX = "nour-local-trades-";
-const LOCAL_TRADES_CAP = 200;
-
-function localTradesKey(walletAddress: string): string {
-  return `${LOCAL_TRADES_PREFIX}${walletAddress.toLowerCase()}`;
-}
-
-function readLocalTrades(walletAddress: string): TradeRecordResponse[] {
-  try {
-    const raw = localStorage.getItem(localTradesKey(walletAddress));
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveLocalTrade(walletAddress: string, trade: TradeRecord): TradeRecordResponse {
-  const record: TradeRecordResponse = {
-    ...trade,
-    id: Date.now(),
-    created_at: new Date().toISOString(),
-  };
-  const list = readLocalTrades(walletAddress);
-  list.unshift(record);
-  try {
-    localStorage.setItem(localTradesKey(walletAddress), JSON.stringify(list.slice(0, LOCAL_TRADES_CAP)));
-  } catch {}
-  return record;
-}
-
-// Derive open positions from the local trade history (buy adds contracts at
-// cost, sell reduces the position and books realized P&L).
 function derivePositionsFromTrades(trades: TradeRecordResponse[]): PositionRecord[] {
   const acc = new Map<string, {
     ticker: string; title: string; side: "yes" | "no";
@@ -168,40 +134,111 @@ export async function getTrades(
   walletAddress: string,
   limit = 100
 ): Promise<TradeRecordResponse[]> {
+  const safeAddress = walletAddress.trim().toLowerCase();
   try {
     const response = await authFetch(
-      `${BACKEND_URL}/api/user/${walletAddress}/trades?limit=${limit}`
+      `${BACKEND_URL}/api/user/${safeAddress}/trades?limit=${limit}`
     );
     if (response.ok) {
       const data = await response.json();
       if (Array.isArray(data) && data.length > 0) return data;
     }
   } catch (error) {
-    logger.warn("Backend trades unavailable, using local trade history", error);
+    logger.warn("Backend trades API unavailable, querying Supabase database directly", error);
   }
-  return readLocalTrades(walletAddress);
+
+  // Database-direct fallback via Supabase (Never localStorage)
+  try {
+    const client = getSupabaseClient();
+    const { data, error } = await client
+      .from("trades")
+      .select("*")
+      .eq("wallet_address", safeAddress)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (!error && Array.isArray(data)) {
+      return data.map((d: any) => ({
+        id: Number(d.id),
+        ticker: d.ticker,
+        title: d.title,
+        side: d.side,
+        action: d.action,
+        amount: Number(d.amount),
+        price: Number(d.price),
+        total_cost: Number(d.total_cost),
+        platform: d.platform || "dreamdex",
+        tx_signature: d.tx_signature,
+        pnl: d.pnl !== null && d.pnl !== undefined ? Number(d.pnl) : undefined,
+        platform_fee: Number(d.platform_fee || 0),
+        created_at: d.created_at,
+      }));
+    }
+  } catch (err) {
+    logger.error("Failed to query trades from Supabase database", err);
+  }
+  return [];
 }
 
 export async function recordTrade(
   walletAddress: string,
   trade: TradeRecord
 ): Promise<TradeRecordResponse | null> {
+  const safeAddress = walletAddress.trim().toLowerCase();
   try {
-    const response = await authFetch(`${BACKEND_URL}/api/user/${walletAddress}/trades`, {
+    const response = await authFetch(`${BACKEND_URL}/api/user/${safeAddress}/trades`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(trade),
     });
     if (response.ok) return await response.json();
   } catch (error) {
-    logger.warn("Backend trade recording unavailable, saving locally", error);
+    logger.warn("Backend trade recording API unavailable, saving to Supabase database directly", error);
   }
-  // Fallback: persist locally so the dashboard keeps working without a backend
+
+  // Database-direct write via Supabase (Never localStorage)
   try {
-    return saveLocalTrade(walletAddress, trade);
-  } catch {
-    return null;
+    const client = getSupabaseClient();
+    const { data, error } = await client
+      .from("trades")
+      .insert({
+        wallet_address: safeAddress,
+        ticker: trade.ticker,
+        title: trade.title,
+        side: trade.side,
+        action: trade.action,
+        amount: trade.amount,
+        price: trade.price,
+        total_cost: trade.total_cost,
+        platform: trade.platform || "dreamdex",
+        tx_signature: trade.tx_signature,
+        platform_fee: trade.platform_fee || 0,
+        pnl: trade.pnl,
+      })
+      .select()
+      .single();
+
+    if (!error && data) {
+      return {
+        id: Number(data.id),
+        ticker: data.ticker,
+        title: data.title,
+        side: data.side,
+        action: data.action,
+        amount: Number(data.amount),
+        price: Number(data.price),
+        total_cost: Number(data.total_cost),
+        platform: data.platform || "dreamdex",
+        tx_signature: data.tx_signature,
+        pnl: data.pnl !== null && data.pnl !== undefined ? Number(data.pnl) : undefined,
+        platform_fee: Number(data.platform_fee || 0),
+        created_at: data.created_at,
+      };
+    }
+  } catch (err) {
+    logger.error("Failed to persist trade to Supabase database", err);
   }
+  return null;
 }
 
 // =============================================================================
@@ -209,8 +246,9 @@ export async function recordTrade(
 // =============================================================================
 
 export async function getStats(walletAddress: string): Promise<UserStats | null> {
+  const safeAddress = walletAddress.trim().toLowerCase();
   try {
-    const response = await authFetch(`${BACKEND_URL}/api/user/${walletAddress}/stats`);
+    const response = await authFetch(`${BACKEND_URL}/api/user/${safeAddress}/stats`);
     if (response.ok) {
       const data = await response.json();
       if (data && typeof data === "object") {
@@ -226,15 +264,16 @@ export async function getStats(walletAddress: string): Promise<UserStats | null>
       }
     }
   } catch (error) {
-    logger.warn("Backend stats unavailable, deriving from local trades", error);
+    logger.warn("Backend stats API unavailable, deriving from database trades", error);
   }
-  // Fallback: derive basic stats from the local trade history
-  const trades = readLocalTrades(walletAddress);
+
+  // Derive stats from database trades
+  const trades = await getTrades(safeAddress);
   if (trades.length === 0) return null;
   return {
     total_trades: trades.length,
     total_volume: trades.reduce((sum, t) => sum + (t.total_cost || 0), 0),
-    total_pnl: 0,
+    total_pnl: trades.reduce((sum, t) => sum + (t.pnl || 0), 0),
     win_rate: 0,
     win_count: 0,
     loss_count: 0,
@@ -256,8 +295,9 @@ export interface PositionRecord {
 }
 
 export async function getPositions(walletAddress: string): Promise<PositionRecord[]> {
+  const safeAddress = walletAddress.trim().toLowerCase();
   try {
-    const response = await authFetch(`${BACKEND_URL}/api/user/${walletAddress}/positions`);
+    const response = await authFetch(`${BACKEND_URL}/api/user/${safeAddress}/positions`);
     if (response.ok) {
       const data = await response.json();
       const list = Array.isArray(data)
@@ -268,10 +308,36 @@ export async function getPositions(walletAddress: string): Promise<PositionRecor
       if (list.length > 0) return list;
     }
   } catch (error) {
-    logger.warn("Backend positions unavailable, deriving from local trades", error);
+    logger.warn("Backend positions API unavailable, querying Supabase positions", error);
   }
-  // Fallback: derive positions from the local trade history
-  return derivePositionsFromTrades(readLocalTrades(walletAddress));
+
+  // Database-direct fallback via Supabase (Never localStorage)
+  try {
+    const client = getSupabaseClient();
+    const { data, error } = await client
+      .from("positions")
+      .select("*")
+      .eq("wallet_address", safeAddress);
+
+    if (!error && Array.isArray(data) && data.length > 0) {
+      return data
+        .filter((p: any) => Number(p.contracts) > 0.0001 || Math.abs(Number(p.realized_pnl)) > 0.0001)
+        .map((p: any) => ({
+          ticker: p.ticker,
+          title: p.title,
+          side: p.side,
+          contracts: Number(p.contracts),
+          avg_price: Number(p.avg_price),
+          realized_pnl: Number(p.realized_pnl),
+        }));
+    }
+  } catch (err) {
+    logger.error("Failed to query positions from Supabase database", err);
+  }
+
+  // Fallback: derive positions from database trade history
+  const dbTrades = await getTrades(safeAddress);
+  return derivePositionsFromTrades(dbTrades);
 }
 
 export default {
