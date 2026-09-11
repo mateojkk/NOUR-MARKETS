@@ -49,6 +49,7 @@ interface PortfolioPosition {
   marketId?: string;
   isSettled?: boolean;
   settlementStatus?: "won" | "lost" | "pending";
+  resolvedOutcome?: "UP" | "DOWN";
 }
 
 async function fetchBatchSettledMarkets(ids: string[]): Promise<Map<string, SettledOnchainData>> {
@@ -242,6 +243,12 @@ export default function Portfolio() {
           settlementStatus = "lost";
         }
 
+        const resolvedOutcome: "UP" | "DOWN" | undefined = onchainSettled?.winningOutcome === 0
+          ? "UP"
+          : onchainSettled?.winningOutcome === 1
+          ? "DOWN"
+          : undefined;
+
         const pnl = ((currentPrice - avgPrice) * contracts) / 100;
         const pnlPercent = avgPrice > 0 ? ((currentPrice - avgPrice) / avgPrice) * 100 : 0;
 
@@ -258,6 +265,7 @@ export default function Portfolio() {
           marketId,
           isSettled,
           settlementStatus,
+          resolvedOutcome,
         };
       });
 
@@ -620,7 +628,7 @@ export default function Portfolio() {
                         </button>
                       ) : position.settlementStatus === "lost" ? (
                         <div className="settled-status-badge lost">
-                          <span>Settled · Expired ($0.00)</span>
+                          <span>{position.resolvedOutcome ? `Resolved ${position.resolvedOutcome} · Position Lost ($0.00)` : "Position Lost ($0.00)"}</span>
                         </div>
                       ) : (
                         <div className="settled-status-badge pending">
