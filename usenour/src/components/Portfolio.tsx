@@ -27,6 +27,7 @@ import { useMarketData } from "../hooks/useMarketData";
 import { formatMarketTitle, resolveMarketIcon, type MarketGroup } from "../types";
 import TradeHistory from "./TradeHistory";
 import RankBadge from "./RankBadge";
+import { useToast, ToastContainer } from "./Toast";
 import "./Portfolio.css";
 
 interface SettledOnchainData {
@@ -35,6 +36,8 @@ interface SettledOnchainData {
   clobStatus: string;
   isResolved: boolean;
   winningOutcome?: 0 | 1;
+  yesTokenId?: string;
+  noTokenId?: string;
 }
 
 interface PortfolioPosition {
@@ -48,29 +51,51 @@ interface PortfolioPosition {
   pnlPercent: number;
   poolAddress?: string;
   marketId?: string;
+  outcomeTokenId?: string;
   isSettled?: boolean;
-  settlementStatus?: "won" | "lost" | "pending";
+  settlementStatus?: "won" | "lost" | "refunded" | "pending";
   resolvedOutcome?: "UP" | "DOWN";
+  isRefunded?: boolean;
 }
 
-async function fetchBatchSettledMarkets(ids: string[]): Promise<Map<string, SettledOnchainData>> {
-  const result = new Map<string, SettledOnchainData>();
+interface BatchSettledResult {
+  settledMap: Map<string, SettledOnchainData>;
+  userOutcomeMap: Map<string, { balance: number; tokenId: string }>;
+}
+
+async function fetchBatchSettledMarkets(ids: string[], userAddress?: string): Promise<BatchSettledResult> {
+  const settledMap = new Map<string, SettledOnchainData>();
+  const userOutcomeMap = new Map<string, { balance: number; tokenId: string }>();
   const cleanIds = ids.filter(Boolean);
-  if (!cleanIds.length) return result;
 
   try {
+    const safeUser = userAddress ? userAddress.toLowerCase() : "";
     const query = `query {
+      ${cleanIds.length > 0 ? `
       Market(where: { _or: [{ id: { _in: ${JSON.stringify(cleanIds)} } }, { marketId: { _in: ${JSON.stringify(cleanIds)} } }] }) {
         id
         marketId
         poolAddress
         clobStatus
+        yesTokenId
+        noTokenId
+        finalized
+        winningOutcome
       }
       MarketResolutionEvent(where: { market_id: { _in: ${JSON.stringify(cleanIds)} } }) {
         market_id
         outcomeIdx
         payoutNumerators
       }
+      ` : ""}
+      ${safeUser ? `
+      OutcomeBalance(where: { account: { _ilike: "${safeUser}" } }) {
+        balance
+        outcomeIndex
+        tokenId
+        market_id
+      }
+      ` : ""}
     }`;
 
     const resp = await fetch("https://dev.smk.somnia.host/v1/graphql", {
@@ -79,10 +104,11 @@ async function fetchBatchSettledMarkets(ids: string[]): Promise<Map<string, Sett
       body: JSON.stringify({ query }),
     });
 
-    if (!resp.ok) return result;
+    if (!resp.ok) return { settledMap, userOutcomeMap };
     const json = await resp.json().catch(() => null);
     const marketsList = json?.data?.Market || [];
     const resList = json?.data?.MarketResolutionEvent || [];
+    const outcomeBalancesList = json?.data?.OutcomeBalance || [];
 
     const resMap = new Map<string, number>();
     for (const r of resList) {
@@ -94,22 +120,41 @@ async function fetchBatchSettledMarkets(ids: string[]): Promise<Map<string, Sett
     for (const m of marketsList) {
       const idKey = String(m.id).toLowerCase();
       const mKey = m.marketId ? String(m.marketId).toLowerCase() : "";
-      const winningOutcome = resMap.get(idKey) ?? (mKey ? resMap.get(mKey) : undefined);
+      const resWinningOutcome = resMap.get(idKey) ?? (mKey ? resMap.get(mKey) : undefined);
+      const winningOutcome = resWinningOutcome !== undefined
+        ? resWinningOutcome
+        : typeof m.winningOutcome === "number"
+        ? m.winningOutcome
+        : undefined;
+
       const entry: SettledOnchainData = {
         marketId: m.marketId || m.id,
         poolAddress: m.poolAddress,
         clobStatus: m.clobStatus,
         isResolved: winningOutcome !== undefined,
         winningOutcome: winningOutcome as 0 | 1 | undefined,
+        yesTokenId: m.yesTokenId ? String(m.yesTokenId) : undefined,
+        noTokenId: m.noTokenId ? String(m.noTokenId) : undefined,
       };
-      result.set(idKey, entry);
-      if (mKey) result.set(mKey, entry);
+      settledMap.set(idKey, entry);
+      if (mKey) settledMap.set(mKey, entry);
+      const suffix = idKey.slice(-6);
+      settledMap.set(suffix, entry);
+    }
+
+    for (const b of outcomeBalancesList) {
+      const mId = String(b.market_id).toLowerCase();
+      const contracts = Number(b.balance) / 1e6;
+      const val = { balance: contracts, tokenId: String(b.tokenId) };
+      userOutcomeMap.set(`${mId}-${b.outcomeIndex}`, val);
+      const suffix = mId.slice(-6);
+      userOutcomeMap.set(`${suffix}-${b.outcomeIndex}`, val);
     }
   } catch (err) {
     console.error("Failed to query on-chain settled market info:", err);
   }
 
-  return result;
+  return { settledMap, userOutcomeMap };
 }
 
 type TabType = "positions" | "closed" | "history" | "stats";
@@ -146,7 +191,11 @@ export default function Portfolio() {
   const [positions, setPositions] = useState<PortfolioPosition[]>([]);
   const openPositions = useMemo(() => positions.filter((p) => !p.isSettled), [positions]);
   const closedPositions = useMemo(() => positions.filter((p) => p.isSettled), [positions]);
-  const claimablePositions = useMemo(() => closedPositions.filter((p) => p.settlementStatus === "won"), [closedPositions]);
+  const { toasts, addToast, removeToast } = useToast();
+  const claimablePositions = useMemo(
+    () => closedPositions.filter((p) => p.settlementStatus === "won" && p.contracts > 0 && !!p.outcomeTokenId),
+    [closedPositions]
+  );
   const totalClaimable = useMemo(() => claimablePositions.reduce((sum, p) => sum + p.contracts, 0), [claimablePositions]);
   const [totalPnl, setTotalPnl] = useState(0);
   const [totalValue, setTotalValue] = useState(0);
@@ -202,9 +251,7 @@ export default function Portfolio() {
         }
       });
 
-      const settledDataMap = settledHexIds.length > 0
-        ? await fetchBatchSettledMarkets(settledHexIds)
-        : new Map<string, SettledOnchainData>();
+      const { settledMap, userOutcomeMap } = await fetchBatchSettledMarkets(settledHexIds, walletAddress);
 
       const mappedPositions: PortfolioPosition[] = backendPositions.map((p: PositionRecord) => {
         const pSuffix = p.ticker?.split("-").pop()?.toLowerCase();
@@ -218,42 +265,64 @@ export default function Portfolio() {
         });
 
         const hexId = pSuffix && /^[0-9a-f]+$/i.test(pSuffix) ? `0x${pSuffix.padStart(64, "0")}`.toLowerCase() : null;
-        const onchainSettled = hexId ? settledDataMap.get(hexId) : null;
+        const onchainSettled = hexId ? settledMap.get(hexId) : (pSuffix ? settledMap.get(pSuffix) : null);
 
         const avgPrice = p.avg_price || 50;
-        const contracts = p.contracts || 0;
+        let contracts = p.contracts || 0;
 
         let isSettled = false;
-        let settlementStatus: "won" | "lost" | "pending" | undefined;
+        let settlementStatus: "won" | "lost" | "refunded" | "pending" | undefined;
         let currentPrice = 50;
         let poolAddress = market?.poolAddress;
         let marketId = market?.marketId;
+        let outcomeTokenId: string | undefined;
+
+        const outcomeIdx = p.side === "yes" ? 0 : 1;
+        const userOutcome = (hexId ? userOutcomeMap.get(`${hexId}-${outcomeIdx}`) : null) ??
+                            (pSuffix ? userOutcomeMap.get(`${pSuffix}-${outcomeIdx}`) : null);
+        const heldTokens = userOutcome ? userOutcome.balance : 0;
+        if (userOutcome?.tokenId) {
+          outcomeTokenId = userOutcome.tokenId;
+        }
 
         // 1. Check if the market has resolved on-chain
         if (onchainSettled && onchainSettled.isResolved) {
           isSettled = true;
           poolAddress = onchainSettled.poolAddress || poolAddress;
           marketId = onchainSettled.marketId || marketId;
+          outcomeTokenId = outcomeTokenId || (outcomeIdx === 0 ? onchainSettled.yesTokenId : onchainSettled.noTokenId);
           const userWon = (p.side === "yes" && onchainSettled.winningOutcome === 0) ||
                           (p.side === "no" && onchainSettled.winningOutcome === 1);
           if (userWon) {
-            settlementStatus = "won";
-            currentPrice = 100;
+            if (heldTokens > 0) {
+              settlementStatus = "won";
+              currentPrice = 100;
+              contracts = heldTokens;
+            } else {
+              // User placed order, but it expired unfilled on the CLOB and was 100% refunded to wallet
+              settlementStatus = "refunded";
+              currentPrice = avgPrice;
+            }
           } else {
             settlementStatus = "lost";
             currentPrice = 0;
+            if (heldTokens > 0) {
+              contracts = heldTokens;
+            }
           }
         } else if (market && !market.closed && market.active !== false && (!market.expiry || Date.now() / 1000 <= market.expiry)) {
           // 2. Market is currently actively trading on-chain
           isSettled = false;
           poolAddress = market.poolAddress || DREAMDEX_CONTRACTS.binaryMarketsModule;
           marketId = market.marketId;
+          outcomeTokenId = outcomeTokenId || (outcomeIdx === 0 ? market.yes_token_id : market.no_token_id);
           currentPrice = p.side === "yes" ? market.price_yes : market.price_no;
         } else if (onchainSettled) {
           // 3. Market is finalized/expired, awaiting resolution event
           isSettled = true;
           poolAddress = onchainSettled.poolAddress || poolAddress;
           marketId = onchainSettled.marketId || marketId;
+          outcomeTokenId = outcomeTokenId || (outcomeIdx === 0 ? onchainSettled.yesTokenId : onchainSettled.noTokenId);
           settlementStatus = "pending";
           currentPrice = avgPrice;
         } else if (market && (market.closed || (market.expiry && Date.now() / 1000 > market.expiry))) {
@@ -261,6 +330,7 @@ export default function Portfolio() {
           isSettled = true;
           poolAddress = market.poolAddress || DREAMDEX_CONTRACTS.binaryMarketsModule;
           marketId = market.marketId;
+          outcomeTokenId = outcomeTokenId || (outcomeIdx === 0 ? market.yes_token_id : market.no_token_id);
           settlementStatus = "pending";
           currentPrice = avgPrice;
         } else if (markets.length > 0) {
@@ -279,8 +349,9 @@ export default function Portfolio() {
           ? "DOWN"
           : undefined;
 
-        const pnl = ((currentPrice - avgPrice) * contracts) / 100;
-        const pnlPercent = avgPrice > 0 ? ((currentPrice - avgPrice) / avgPrice) * 100 : 0;
+        const isRefunded = settlementStatus === "refunded";
+        const pnl = isRefunded ? 0 : ((currentPrice - avgPrice) * contracts) / 100;
+        const pnlPercent = isRefunded || avgPrice === 0 ? 0 : ((currentPrice - avgPrice) / avgPrice) * 100;
 
         return {
           ticker: market?.ticker || p.ticker,
@@ -293,9 +364,11 @@ export default function Portfolio() {
           pnlPercent,
           poolAddress,
           marketId,
+          outcomeTokenId,
           isSettled,
           settlementStatus,
           resolvedOutcome,
+          isRefunded,
         };
       });
 
@@ -469,22 +542,28 @@ export default function Portfolio() {
   const handleRedeem = async (pos: PortfolioPosition) => {
     if (!walletProvider) return;
     if (!pos.poolAddress || pos.poolAddress.toLowerCase() === DREAMDEX_CONTRACTS.binaryMarketsModule.toLowerCase()) {
-      alert("Cannot redeem: on-chain binary pool address was not found for this market.");
+      addToast("error", "Cannot redeem: on-chain binary pool address was not found for this market.");
       return;
     }
-    if (!pos.marketId || pos.marketId === "0x0000000000000000000000000000000000000000000000000000000000000000") {
-      alert("Cannot redeem: on-chain market ID was not found.");
+    if (!pos.outcomeTokenId) {
+      addToast("error", "Cannot redeem: on-chain outcome token ID was not found.");
       return;
     }
     setRedeemingId(pos.ticker);
     try {
-      const outcomeIdx = pos.side === "yes" ? 0 : 1;
-      await redeemWinningPosition(walletProvider, pos.marketId, pos.poolAddress, outcomeIdx, pos.contracts);
+      await redeemWinningPosition(
+        walletProvider,
+        pos.poolAddress,
+        pos.outcomeTokenId,
+        pos.contracts,
+        walletAddress || undefined
+      );
+      addToast("success", `Successfully claimed $${pos.contracts.toFixed(2)} tUSDC payout!`);
       await refreshBalance();
       await fetchPortfolio();
     } catch (err: any) {
       console.error("Redemption error:", err);
-      alert(err?.reason || err?.message || "Redemption failed on Somnia Shannon");
+      addToast("error", err?.reason || err?.message || "Redemption failed on Somnia Shannon");
     } finally {
       setRedeemingId(null);
     }
@@ -762,6 +841,7 @@ export default function Portfolio() {
                 const icon = resolveMarketIcon(position.ticker, position.title);
                 const isWon = position.settlementStatus === "won";
                 const isLost = position.settlementStatus === "lost";
+                const isRefunded = position.settlementStatus === "refunded";
                 return (
                   <div key={idx} className="position-card">
                     <div className="position-header">
@@ -786,7 +866,8 @@ export default function Portfolio() {
                         </span>
                         {isWon && <span className="settled-outcome-pill won">WON</span>}
                         {isLost && <span className="settled-outcome-pill lost">LOST</span>}
-                        {!isWon && !isLost && <span className="settled-outcome-pill pending">PENDING</span>}
+                        {isRefunded && <span className="settled-outcome-pill refunded">REFUNDED</span>}
+                        {!isWon && !isLost && !isRefunded && <span className="settled-outcome-pill pending">PENDING</span>}
                       </div>
                     </div>
 
@@ -801,12 +882,12 @@ export default function Portfolio() {
                       </div>
                       <div className="metric-box">
                         <span className="m-label">Settlement Price</span>
-                        <span className="m-val">{isWon ? "100.0¢" : isLost ? "0.0¢" : `${position.currentPrice.toFixed(1)}¢`}</span>
+                        <span className="m-val">{isWon ? "100.0¢" : isLost ? "0.0¢" : isRefunded ? `${position.avgPrice.toFixed(1)}¢ (Refunded)` : `${position.currentPrice.toFixed(1)}¢`}</span>
                       </div>
                       <div className="metric-box">
                         <span className="m-label">Realized P&L</span>
-                        <span className={`m-val ${position.pnl >= 0 ? "text-success" : "text-danger"}`}>
-                          {position.pnl >= 0 ? "+" : ""}${position.pnl.toFixed(2)} ({position.pnlPercent >= 0 ? "+" : ""}{position.pnlPercent.toFixed(1)}%)
+                        <span className={`m-val ${isRefunded ? "" : position.pnl >= 0 ? "text-success" : "text-danger"}`}>
+                          {isRefunded ? "$0.00 (0.0%)" : `${position.pnl >= 0 ? "+" : ""}$${position.pnl.toFixed(2)} (${position.pnlPercent >= 0 ? "+" : ""}${position.pnlPercent.toFixed(1)}%)`}
                         </span>
                       </div>
                     </div>
@@ -821,6 +902,10 @@ export default function Portfolio() {
                           <Trophy size={14} />
                           <span>{redeemingId === position.ticker ? "Redeeming..." : `Claim Payout ($${((position.contracts * 100) / 100).toFixed(2)} tUSDC)`}</span>
                         </button>
+                      ) : isRefunded ? (
+                        <div className="settled-status-badge refunded">
+                          <span>Unfilled Order Expired · 100% Collateral Returned to Wallet</span>
+                        </div>
                       ) : isLost ? (
                         <div className="settled-status-badge lost">
                           <span>{position.resolvedOutcome ? `Resolved ${position.resolvedOutcome} · Position Lost ($0.00)` : "Position Lost ($0.00)"}</span>
@@ -1044,6 +1129,8 @@ export default function Portfolio() {
           </div>
         </div>
       )}
+
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 }

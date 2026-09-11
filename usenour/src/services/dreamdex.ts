@@ -51,7 +51,8 @@ export const BINARY_POOL_ABI = parseAbi([
 ]);
 
 export const BINARY_SETTLEMENT_ABI = parseAbi([
-  "function redeem(bytes32 marketId, address pool, uint256 outcomeIdx, uint256 amount) external returns (uint256 payout)",
+  "function finalizeAndRedeem(address pool, uint256 outcomeTokenId, uint256 amount, address recipient) external",
+  "function redeem(uint256 outcomeTokenId, uint256 amount, address recipient) external",
   "function isMarketSettled(bytes32 marketId) view returns (bool isSettled, uint8 winningOutcome)",
 ]);
 
@@ -483,27 +484,98 @@ export async function mintCompleteSets(walletProvider: any, poolAddress: string,
   return receipt.hash;
 }
 
-// 5. Redeem Winning Position after Settlement (1:1 Payout)
+// 5. Redeem Winning Position after Settlement (1:1 Payout via finalizeAndRedeem)
 export async function redeemWinningPosition(
   walletProvider: any,
-  marketId: string,
-  poolAddress: string,
-  outcomeIdx: 0 | 1,
-  amount: number
+  param1: string, // poolAddress OR marketId
+  param2: string, // outcomeTokenId OR poolAddress
+  param3: any,    // amount OR outcomeIdx
+  param4?: any,   // recipientAddress OR amount
+  param5?: string // recipientAddress
 ): Promise<string> {
   const { ethers } = await import("ethers");
-  const safePoolAddress = ethers.getAddress(poolAddress.toLowerCase());
   const provider = new ethers.BrowserProvider(walletProvider);
   const signer = await provider.getSigner();
+  const signerAddress = await signer.getAddress();
 
-  const settlementContract = new ethers.Contract(
-    DREAMDEX_CONTRACTS.binarySettlement,
-    ["function redeem(bytes32 marketId, address pool, uint256 outcomeIdx, uint256 amount) external returns (uint256)"],
+  let poolAddress: string;
+  let outcomeTokenId: string = "";
+  let amount: number;
+  let recipient: string;
+
+  // Check if called with new signature (poolAddress, outcomeTokenId, amount, recipient)
+  // or legacy signature (marketId, poolAddress, outcomeIdx, amount, recipient)
+  if (ethers.isAddress(param1)) {
+    poolAddress = param1;
+    outcomeTokenId = String(param2);
+    amount = Number(param3);
+    recipient = param4 ? ethers.getAddress(String(param4).toLowerCase()) : signerAddress;
+  } else {
+    poolAddress = param2;
+    amount = Number(param4);
+    recipient = param5 ? ethers.getAddress(String(param5).toLowerCase()) : signerAddress;
+    const outcomeIdx = Number(param3) === 1 ? 1 : 0;
+
+    // Fetch token IDs from Hasura if not provided directly
+    try {
+      const safePool = ethers.getAddress(poolAddress.toLowerCase());
+      const q = `query { Market(where: { poolAddress: { _ilike: "${safePool}" } }, limit: 1) { yesTokenId noTokenId } }`;
+      const res = await fetch("https://dev.smk.somnia.host/v1/graphql", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: q }),
+      });
+      const data = await res.json();
+      const m = data?.data?.Market?.[0];
+      if (m) {
+        outcomeTokenId = outcomeIdx === 1 ? m.noTokenId : m.yesTokenId;
+      }
+    } catch (_) {}
+  }
+
+  const safePoolAddress = ethers.getAddress(poolAddress.toLowerCase());
+
+  if (!outcomeTokenId) {
+    throw new Error("Cannot redeem: on-chain outcome token ID could not be determined.");
+  }
+
+  // Check on-chain balance first to avoid cryptic require(false) reverts
+  const erc6909 = new ethers.Contract(
+    DREAMDEX_CONTRACTS.outcomeToken6909,
+    ["function balanceOf(address owner, uint256 id) view returns (uint256)"],
     signer
   );
 
-  const rawAmount = parseUnits(Number(amount).toFixed(DREAMDEX_CONTRACTS.collateralDecimals), DREAMDEX_CONTRACTS.collateralDecimals);
-  const tx = await settlementContract.redeem(marketId, safePoolAddress, outcomeIdx, rawAmount);
+  const onchainBal: bigint = await erc6909.balanceOf(signerAddress, BigInt(outcomeTokenId));
+  if (onchainBal === 0n) {
+    throw new Error(
+      "You hold 0 on-chain outcome contracts for this market. Your order may have expired unfilled and the collateral was already refunded to your wallet."
+    );
+  }
+
+  let rawAmount = parseUnits(
+    Number(amount).toFixed(DREAMDEX_CONTRACTS.collateralDecimals),
+    DREAMDEX_CONTRACTS.collateralDecimals
+  );
+  if (rawAmount > onchainBal) {
+    rawAmount = onchainBal;
+  }
+
+  const settlementContract = new ethers.Contract(
+    DREAMDEX_CONTRACTS.binarySettlement,
+    [
+      "function finalizeAndRedeem(address pool, uint256 outcomeTokenId, uint256 amount, address recipient) external",
+      "function redeem(uint256 outcomeTokenId, uint256 amount, address recipient) external",
+    ],
+    signer
+  );
+
+  const tx = await settlementContract.finalizeAndRedeem(
+    safePoolAddress,
+    BigInt(outcomeTokenId),
+    rawAmount,
+    recipient
+  );
   const receipt = await tx.wait();
   return receipt.hash;
 }

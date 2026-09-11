@@ -576,6 +576,12 @@
   border: 1px solid rgba(234, 179, 8, 0.2);
 }
 
+.settled-status-badge.refunded {
+  background: rgba(148, 163, 184, 0.1);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
 .settled-outcome-pill {
   display: inline-flex;
   align-items: center;
@@ -604,6 +610,12 @@
   background: rgba(234, 179, 8, 0.15);
   color: #eab308;
   border: 1px solid rgba(234, 179, 8, 0.3);
+}
+
+.settled-outcome-pill.refunded {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
 }
 
 /* Empty States */
