@@ -553,6 +553,29 @@
   background: var(--primary-hover);
 }
 
+.settled-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  width: 100%;
+}
+
+.settled-status-badge.lost {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.settled-status-badge.pending {
+  background: rgba(234, 179, 8, 0.1);
+  color: #eab308;
+  border: 1px solid rgba(234, 179, 8, 0.2);
+}
+
 /* Empty States */
 .positions-empty,
 .portfolio-empty {
