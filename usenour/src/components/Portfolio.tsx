@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Wallet,
@@ -6,6 +6,7 @@ import {
   RefreshCw,
   Trophy,
   Check,
+  CheckCircle2,
   ExternalLink,
   Copy,
   Layers,
@@ -108,7 +109,7 @@ async function fetchBatchSettledMarkets(ids: string[]): Promise<Map<string, Sett
   return result;
 }
 
-type TabType = "positions" | "history" | "stats";
+type TabType = "positions" | "closed" | "history" | "stats";
 
 export default function Portfolio() {
   const navigate = useNavigate();
@@ -125,12 +126,12 @@ export default function Portfolio() {
   const { markets } = useMarketData();
   const [activeTab, setActiveTab] = useState<TabType>(() => {
     const t = searchParams.get("tab");
-    return t === "history" || t === "stats" ? t : "positions";
+    return t === "closed" || t === "history" || t === "stats" ? t : "positions";
   });
 
   useEffect(() => {
     const t = searchParams.get("tab");
-    if (t === "positions" || t === "history" || t === "stats") {
+    if (t === "positions" || t === "closed" || t === "history" || t === "stats") {
       setActiveTab(t);
     }
   }, [searchParams]);
@@ -140,6 +141,8 @@ export default function Portfolio() {
     setSearchParams({ tab });
   };
   const [positions, setPositions] = useState<PortfolioPosition[]>([]);
+  const openPositions = useMemo(() => positions.filter((p) => !p.isSettled), [positions]);
+  const closedPositions = useMemo(() => positions.filter((p) => p.isSettled), [positions]);
   const [totalPnl, setTotalPnl] = useState(0);
   const [totalValue, setTotalValue] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -274,8 +277,10 @@ export default function Portfolio() {
       let pnl = 0;
       let holdingsValue = 0;
       mappedPositions.forEach((p) => {
-        pnl += p.pnl;
-        holdingsValue += p.contracts * (p.currentPrice / 100);
+        if (!p.isSettled) {
+          pnl += p.pnl;
+          holdingsValue += p.contracts * (p.currentPrice / 100);
+        }
       });
 
       setTotalPnl(pnl);
@@ -521,7 +526,15 @@ export default function Portfolio() {
           onClick={() => handleTabChange("positions")}
         >
           <Layers size={15} />
-          <span>Open Positions ({positions.length})</span>
+          <span>Open Positions ({openPositions.length})</span>
+        </button>
+
+        <button
+          className={`tab-btn ${activeTab === "closed" ? "active" : ""}`}
+          onClick={() => handleTabChange("closed")}
+        >
+          <CheckCircle2 size={15} />
+          <span>Closed Positions ({closedPositions.length})</span>
         </button>
 
         <button
@@ -541,14 +554,14 @@ export default function Portfolio() {
         </button>
       </div>
 
-      {/* Tab 1: Positions */}
+      {/* Tab 1: Open Positions */}
       {activeTab === "positions" && (
         <div className="tab-pane">
-          {positions.length === 0 ? (
+          {openPositions.length === 0 ? (
             <div className="positions-empty">
               <BarChart3 size={36} />
               <h4>No Open Positions</h4>
-              <p>You do not have any open positions.</p>
+              <p>You do not have any active open prediction trades.</p>
               <button className="cta-browse-btn" onClick={() => navigate("/")}>
                 <span>Explore Markets</span>
                 <ArrowUpRight size={15} />
@@ -556,7 +569,7 @@ export default function Portfolio() {
             </div>
           ) : (
             <div className="positions-list">
-              {positions.map((position, idx) => {
+              {openPositions.map((position, idx) => {
                 const icon = resolveMarketIcon(position.ticker, position.title);
                 return (
                   <div key={idx} className="position-card">
@@ -603,30 +616,101 @@ export default function Portfolio() {
                     </div>
 
                     <div className="position-footer-actions">
-                      {!position.isSettled ? (
-                        <>
-                          <button
-                            className="position-action-btn close-btn"
-                            onClick={() => handleOpenCloseModal(position)}
-                          >
-                            <XCircle size={14} />
-                            <span>Close Position</span>
-                          </button>
-                          <button className="position-action-btn primary" onClick={() => handleTradeMore(position)}>
-                            <span>Trade More</span>
-                            <ArrowUpRight size={14} />
-                          </button>
-                        </>
-                      ) : position.settlementStatus === "won" ? (
+                      <button
+                        className="position-action-btn close-btn"
+                        onClick={() => handleOpenCloseModal(position)}
+                      >
+                        <XCircle size={14} />
+                        <span>Close Position</span>
+                      </button>
+                      <button className="position-action-btn primary" onClick={() => handleTradeMore(position)}>
+                        <span>Trade More</span>
+                        <ArrowUpRight size={14} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab 2: Closed / Settled Positions */}
+      {activeTab === "closed" && (
+        <div className="tab-pane">
+          {closedPositions.length === 0 ? (
+            <div className="positions-empty">
+              <CheckCircle2 size={36} />
+              <h4>No Closed Positions</h4>
+              <p>Your completed, settled, or expired positions will appear here.</p>
+            </div>
+          ) : (
+            <div className="positions-list">
+              {closedPositions.map((position, idx) => {
+                const icon = resolveMarketIcon(position.ticker, position.title);
+                const isWon = position.settlementStatus === "won";
+                const isLost = position.settlementStatus === "lost";
+                return (
+                  <div key={idx} className="position-card">
+                    <div className="position-header">
+                      <div className="position-title-group">
+                        <img
+                          src={icon}
+                          alt=""
+                          className="position-market-icon"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src = "/icons/nour.png";
+                          }}
+                        />
+                        <div>
+                          <div className="position-title">{formatMarketTitle(position.title)}</div>
+                          <span className="position-ticker">{position.ticker}</span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span className={`position-side-badge ${position.side}`}>
+                          {position.side === "yes" ? "UP (YES)" : "DOWN (NO)"}
+                        </span>
+                        {isWon && <span className="settled-outcome-pill won">WON</span>}
+                        {isLost && <span className="settled-outcome-pill lost">LOST</span>}
+                        {!isWon && !isLost && <span className="settled-outcome-pill pending">PENDING</span>}
+                      </div>
+                    </div>
+
+                    <div className="position-metrics-grid">
+                      <div className="metric-box">
+                        <span className="m-label">Contracts / Shares</span>
+                        <span className="m-val">{position.contracts.toLocaleString()}</span>
+                      </div>
+                      <div className="metric-box">
+                        <span className="m-label">Avg Entry Price</span>
+                        <span className="m-val">{position.avgPrice.toFixed(1)}¢</span>
+                      </div>
+                      <div className="metric-box">
+                        <span className="m-label">Settlement Price</span>
+                        <span className="m-val">{isWon ? "100.0¢" : isLost ? "0.0¢" : `${position.currentPrice.toFixed(1)}¢`}</span>
+                      </div>
+                      <div className="metric-box">
+                        <span className="m-label">Realized P&L</span>
+                        <span className={`m-val ${position.pnl >= 0 ? "text-success" : "text-danger"}`}>
+                          {position.pnl >= 0 ? "+" : ""}${position.pnl.toFixed(2)} ({position.pnlPercent >= 0 ? "+" : ""}{position.pnlPercent.toFixed(1)}%)
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="position-footer-actions">
+                      {isWon ? (
                         <button
                           className="position-action-btn redeem"
                           onClick={() => handleRedeem(position)}
                           disabled={redeemingId === position.ticker}
                         >
                           <Trophy size={14} />
-                          <span>{redeemingId === position.ticker ? "Redeeming..." : `Claim Payout ($${((position.contracts * 100) / 100).toFixed(2)})`}</span>
+                          <span>{redeemingId === position.ticker ? "Redeeming..." : `Claim Payout ($${((position.contracts * 100) / 100).toFixed(2)} tUSDC)`}</span>
                         </button>
-                      ) : position.settlementStatus === "lost" ? (
+                      ) : isLost ? (
                         <div className="settled-status-badge lost">
                           <span>{position.resolvedOutcome ? `Resolved ${position.resolvedOutcome} · Position Lost ($0.00)` : "Position Lost ($0.00)"}</span>
                         </div>
