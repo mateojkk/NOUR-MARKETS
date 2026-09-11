@@ -310,14 +310,15 @@ export async function placeDreamDexOrder({
   // 1. Calculate prices and costs
   // The Somnia BinaryPool contract ALWAYS expects the YES-side probability / limit price
   // regardless of whether buying or selling YES or NO (per Somnia SDK tradeAbi.js).
-  const isMarket = orderType === "market";
-  // If market order: apply a small slippage buffer to ensure the taker order crosses the best ask/bid immediately
+  const isMarket = orderType === "market" || orderType === "ioc";
+  // If market order: apply +0.02 slippage buffer (per DreamDEX Event Contracts doc)
+  // to cross the touch and match resting liquidity immediately on-chain.
   let effectiveProb = priceProb;
   if (isMarket) {
     if (action === "buy") {
-      effectiveProb = Math.min(0.99, priceProb + 0.015);
+      effectiveProb = Math.min(0.99, priceProb + 0.02);
     } else {
-      effectiveProb = Math.max(0.01, priceProb - 0.015);
+      effectiveProb = Math.max(0.01, priceProb - 0.02);
     }
   }
 
@@ -332,8 +333,11 @@ export async function placeDreamDexOrder({
   const baseSide = side === "yes" ? 0 : 2;
   const sideCode = action === "sell" ? baseSide + 1 : baseSide;
 
-  // orderType: 0 = LIMIT (NormalOrder, fills matching liquidity & rests remainder), 2 = IOC, 3 = PostOnly
-  const typeCode = orderType === "ioc" ? 2 : orderType === "post_only" ? 3 : 0;
+  // orderType per DreamDEX docs Gotcha #4:
+  // 0 = LIMIT (NormalOrder, rests remainder on book)
+  // 2 = IOC (Immediate Or Cancel — matches resting liquidity, remainder never rests silently)
+  // 3 = PostOnly
+  const typeCode = isMarket ? 2 : orderType === "post_only" ? 3 : 0;
 
   // Collateral contract
   const collateralContract = new ethers.Contract(
@@ -432,18 +436,27 @@ export async function placeDreamDexOrder({
     }
   }
 
+  // Gate on live on-chain status & set order expiry (Gotchas #1 & #5)
   // Order expiry: 0 < expireNs <= pool.marketExpiryNs
   let expireNs: bigint;
   try {
-    const poolExpiryNs: bigint = await poolContract.marketExpiryNs();
+    const [poolExpiryNs, poolParams] = await Promise.all([
+      poolContract.marketExpiryNs() as Promise<bigint>,
+      poolContract.getBinaryPoolParams(),
+    ]);
+    if (poolParams.finalized) {
+      throw new Error("This market is finalized on-chain and no longer accepts trades.");
+    }
     const nowNs = BigInt(Date.now()) * 1_000_000n;
     if (poolExpiryNs <= nowNs) {
       throw new Error("This market window has already closed and is awaiting settlement.");
     }
-    expireNs = poolExpiryNs;
+    // For market/IOC: 300s dead-man switch per Gotcha #5, capped at pool expiry
+    const deadmanNs = nowNs + 300_000_000_000n;
+    expireNs = isMarket ? (deadmanNs < poolExpiryNs ? deadmanNs : poolExpiryNs) : poolExpiryNs;
   } catch (expErr: any) {
-    if (expErr?.message?.includes("closed")) throw expErr;
-    expireNs = getExpiryNanoseconds(900);
+    if (expErr?.message?.includes("closed") || expErr?.message?.includes("finalized")) throw expErr;
+    expireNs = getExpiryNanoseconds(300);
   }
 
   // Estimate gas with a generous safety margin for Somnia testnet
