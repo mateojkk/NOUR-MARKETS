@@ -4,17 +4,20 @@ import {
   ArrowUpRight,
   Droplets,
   ExternalLink,
-  CheckCircle2,
   ArrowDownToLine,
   ArrowUpFromLine,
   RefreshCw,
   Copy,
   Check,
+  Trophy,
+  RotateCcw,
+  TrendingUp,
+  TrendingDown,
 } from "lucide-react";
 import {
-  getTransfers,
+  getLedgerHistory,
   seedInitialDepositIfEmpty,
-  type TransferRecord,
+  type LedgerEntry,
 } from "../services/transferService";
 import { SOMNIA_EXPLORER_URL } from "../services/dreamdex";
 import styles from "./TransferHistory.module.css";
@@ -26,7 +29,7 @@ interface TransferHistoryProps {
   onOpenWithdraw?: () => void;
 }
 
-type FilterType = "all" | "deposit" | "withdrawal";
+type FilterType = "all" | "credit" | "debit";
 
 export default function TransferHistory({
   walletAddress,
@@ -34,33 +37,33 @@ export default function TransferHistory({
   onOpenDeposit,
   onOpenWithdraw,
 }: TransferHistoryProps) {
-  const [transfers, setTransfers] = useState<TransferRecord[]>([]);
+  const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [filter, setFilter] = useState<FilterType>("all");
   const [copiedTx, setCopiedTx] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const loadTransfers = async () => {
+  const loadHistory = async () => {
     if (!walletAddress) {
-      setTransfers([]);
+      setEntries([]);
       return;
     }
     setLoading(true);
     try {
       await seedInitialDepositIfEmpty(walletAddress, collateralBalance);
-      const data = await getTransfers(walletAddress);
-      setTransfers(data);
+      const data = await getLedgerHistory(walletAddress);
+      setEntries(data);
     } catch (err) {
-      console.error("Failed to load transfers:", err);
+      console.error("Failed to load ledger history:", err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadTransfers();
+    loadHistory();
 
     const handleUpdate = () => {
-      loadTransfers();
+      loadHistory();
     };
 
     window.addEventListener("nour:transfers-updated", handleUpdate);
@@ -75,29 +78,12 @@ export default function TransferHistory({
     setTimeout(() => setCopiedTx(null), 2000);
   };
 
-  const filteredTransfers = useMemo(() => {
-    if (filter === "all") return transfers;
-    return transfers.filter((t) => t.type === filter);
-  }, [transfers, filter]);
+  const filteredEntries = useMemo(() => {
+    if (filter === "all") return entries;
+    return entries.filter((e) => e.flow === filter);
+  }, [entries, filter]);
 
-  // Financial summary metrics
-  const totalDeposited = useMemo(
-    () =>
-      transfers
-        .filter((t) => t.type === "deposit" && t.status === "completed")
-        .reduce((sum, t) => sum + t.amount, 0),
-    [transfers]
-  );
-
-  const totalWithdrawn = useMemo(
-    () =>
-      transfers
-        .filter((t) => t.type === "withdrawal" && t.status === "completed")
-        .reduce((sum, t) => sum + t.amount, 0),
-    [transfers]
-  );
-
-  const formatDate = (isoDate: string) => {
+  const formatTimestamp = (isoDate: string) => {
     try {
       const date = new Date(isoDate);
       return date.toLocaleDateString("en-US", {
@@ -106,115 +92,107 @@ export default function TransferHistory({
         year: "numeric",
         hour: "2-digit",
         minute: "2-digit",
+        second: "2-digit",
       });
     } catch {
       return isoDate;
     }
   };
 
-  const truncateAddress = (addr?: string) => {
-    if (!addr) return "";
-    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  const getRelativeTime = (isoDate: string) => {
+    try {
+      const diffMs = Date.now() - new Date(isoDate).getTime();
+      const diffSec = Math.floor(diffMs / 1000);
+      if (diffSec < 60) return "Just now";
+      const diffMin = Math.floor(diffSec / 60);
+      if (diffMin < 60) return `${diffMin}m ago`;
+      const diffHr = Math.floor(diffMin / 60);
+      if (diffHr < 24) return `${diffHr}h ago`;
+      const diffDays = Math.floor(diffHr / 24);
+      return `${diffDays}d ago`;
+    } catch {
+      return "";
+    }
+  };
+
+  const getEntryIcon = (entry: LedgerEntry) => {
+    if (entry.category === "payout") return <Trophy size={16} />;
+    if (entry.category === "refund") return <RotateCcw size={16} />;
+    if (entry.category === "trade") {
+      return entry.flow === "debit" ? <TrendingDown size={16} /> : <TrendingUp size={16} />;
+    }
+    if (entry.flow === "credit") {
+      return entry.title.includes("Faucet") ? <Droplets size={16} /> : <ArrowDownLeft size={16} />;
+    }
+    return <ArrowUpRight size={16} />;
   };
 
   return (
     <div className={styles.container}>
-      {/* Overview Stats Bar */}
-      <div className={styles.statsBar}>
-        <div className={styles.statItem}>
-          <span className={styles.statLabel}>Total Deposited</span>
-          <span className={`${styles.statValue} ${styles.positive}`}>
-            +${totalDeposited.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            <span className={styles.statUnit}>tUSDC</span>
-          </span>
-        </div>
-
-        <div className={styles.statDivider} />
-
-        <div className={styles.statItem}>
-          <span className={styles.statLabel}>Total Withdrawn</span>
-          <span className={`${styles.statValue} ${styles.negative}`}>
-            -${totalWithdrawn.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            <span className={styles.statUnit}>tUSDC</span>
-          </span>
-        </div>
-
-        <div className={styles.statDivider} />
-
-        <div className={styles.statItem}>
-          <span className={styles.statLabel}>Net Funding</span>
-          <span className={styles.statValue}>
-            ${(totalDeposited - totalWithdrawn).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            <span className={styles.statUnit}>tUSDC</span>
-          </span>
-        </div>
-
-        <div className={styles.quickActions}>
-          {onOpenDeposit && (
-            <button className={styles.actionBtnDeposit} onClick={onOpenDeposit}>
-              <ArrowDownToLine size={14} />
-              <span>Deposit</span>
-            </button>
-          )}
-          {onOpenWithdraw && (
-            <button className={styles.actionBtnWithdraw} onClick={onOpenWithdraw}>
-              <ArrowUpFromLine size={14} />
-              <span>Withdraw</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Filter and Controls Header */}
+      {/* Controls Header */}
       <div className={styles.header}>
         <div className={styles.filterTabs}>
           <button
             className={`${styles.filterTab} ${filter === "all" ? styles.active : ""}`}
             onClick={() => setFilter("all")}
           >
-            All Transfers ({transfers.length})
+            All Activity ({entries.length})
           </button>
           <button
-            className={`${styles.filterTab} ${filter === "deposit" ? styles.active : ""}`}
-            onClick={() => setFilter("deposit")}
+            className={`${styles.filterTab} ${filter === "credit" ? styles.active : ""}`}
+            onClick={() => setFilter("credit")}
           >
-            Deposits ({transfers.filter((t) => t.type === "deposit").length})
+            Credits (+) ({entries.filter((e) => e.flow === "credit").length})
           </button>
           <button
-            className={`${styles.filterTab} ${filter === "withdrawal" ? styles.active : ""}`}
-            onClick={() => setFilter("withdrawal")}
+            className={`${styles.filterTab} ${filter === "debit" ? styles.active : ""}`}
+            onClick={() => setFilter("debit")}
           >
-            Withdrawals ({transfers.filter((t) => t.type === "withdrawal").length})
+            Debits (-) ({entries.filter((e) => e.flow === "debit").length})
           </button>
         </div>
 
-        <button className={styles.refreshBtn} onClick={loadTransfers} title="Reload history">
-          <RefreshCw size={14} />
-        </button>
+        <div className={styles.headerRight}>
+          {onOpenDeposit && (
+            <button className={styles.actionBtnDeposit} onClick={onOpenDeposit} title="Deposit or Claim tUSDC">
+              <ArrowDownToLine size={13} />
+              <span>Deposit</span>
+            </button>
+          )}
+          {onOpenWithdraw && (
+            <button className={styles.actionBtnWithdraw} onClick={onOpenWithdraw} title="Withdraw tUSDC">
+              <ArrowUpFromLine size={13} />
+              <span>Withdraw</span>
+            </button>
+          )}
+          <button className={styles.refreshBtn} onClick={loadHistory} title="Reload activity ledger">
+            <RefreshCw size={14} className={loading ? "spinning" : ""} />
+          </button>
+        </div>
       </div>
 
-      {/* Transfer List or Empty State */}
-      {loading ? (
+      {/* Ledger List or Empty State */}
+      {loading && entries.length === 0 ? (
         <div className={styles.emptyState}>
           <RefreshCw size={24} className="spinning" style={{ color: "var(--primary)" }} />
-          <p style={{ marginTop: "8px" }}>Loading transfers from database...</p>
+          <p style={{ marginTop: "8px" }}>Loading account activity from database...</p>
         </div>
-      ) : filteredTransfers.length === 0 ? (
+      ) : filteredEntries.length === 0 ? (
         <div className={styles.emptyState}>
           <div className={styles.emptyIconWrap}>
-            <ArrowDownToLine size={32} />
+            <ArrowDownToLine size={28} />
           </div>
-          <h4>No {filter !== "all" ? filter : ""} transfers found</h4>
+          <h4>No {filter !== "all" ? `${filter} ` : ""}activity recorded</h4>
           <p>
             {filter === "all"
-              ? "You haven't made any deposits or withdrawals yet. Claim free testnet tUSDC or fund your wallet to get started."
-              : `You have no ${filter} records in your history.`}
+              ? "No deposits, withdrawals, or trades found for this wallet yet."
+              : `You have no ${filter} transactions in your account history.`}
           </p>
           <div className={styles.emptyActions}>
             {onOpenDeposit && (
               <button className={styles.emptyCtaDeposit} onClick={onOpenDeposit}>
                 <Droplets size={15} />
-                <span>Deposit / Claim 1,000 tUSDC</span>
+                <span>Claim 1,000 tUSDC Faucet</span>
               </button>
             )}
             {onOpenWithdraw && (
@@ -227,41 +205,37 @@ export default function TransferHistory({
         </div>
       ) : (
         <div className={styles.transferList}>
-          {filteredTransfers.map((item) => {
-            const isDeposit = item.type === "deposit";
-            const isFaucet = item.subtype === "faucet";
+          {filteredEntries.map((item) => {
+            const isCredit = item.flow === "credit";
+            const relTime = getRelativeTime(item.timestamp);
 
             return (
               <div key={item.id} className={styles.transferCard}>
                 <div className={styles.leftGroup}>
-                  <div className={`${styles.iconWrap} ${isDeposit ? styles.iconDeposit : styles.iconWithdraw}`}>
-                    {isDeposit ? (
-                      isFaucet ? <Droplets size={16} /> : <ArrowDownLeft size={16} />
-                    ) : (
-                      <ArrowUpRight size={16} />
-                    )}
+                  <div className={`${styles.iconWrap} ${isCredit ? styles.iconCredit : styles.iconDebit}`}>
+                    {getEntryIcon(item)}
                   </div>
 
                   <div className={styles.infoCol}>
                     <div className={styles.titleRow}>
-                      <span className={styles.transferTitle}>
-                        {isDeposit
-                          ? isFaucet
-                            ? "Testnet Faucet Collateral"
-                            : "Collateral Deposit"
-                          : item.toAddress
-                          ? `Withdrawal to ${truncateAddress(item.toAddress)}`
-                          : "Collateral Withdrawal"}
-                      </span>
-                      <span className={`${styles.typeBadge} ${isDeposit ? styles.badgeDeposit : styles.badgeWithdraw}`}>
-                        {item.type.toUpperCase()}
+                      <span className={styles.transferTitle}>{item.title}</span>
+                      <span className={`${styles.flowBadge} ${isCredit ? styles.badgeCredit : styles.badgeDebit}`}>
+                        {isCredit ? "+ CREDIT" : "- DEBIT"}
                       </span>
                     </div>
 
+                    {item.subtitle && (
+                      <div className={styles.subtitleText}>{item.subtitle}</div>
+                    )}
+
                     <div className={styles.metaRow}>
-                      <span className={styles.dateText}>{formatDate(item.timestamp)}</span>
-                      <span className={styles.bullet}>•</span>
-                      <span className={styles.networkText}>Somnia Shannon</span>
+                      <span className={styles.dateText}>{formatTimestamp(item.timestamp)}</span>
+                      {relTime && (
+                        <>
+                          <span className={styles.bullet}>•</span>
+                          <span className={styles.relTimeText}>{relTime}</span>
+                        </>
+                      )}
                       {item.txHash && (
                         <>
                           <span className={styles.bullet}>•</span>
@@ -270,9 +244,9 @@ export default function TransferHistory({
                             target="_blank"
                             rel="noopener noreferrer"
                             className={styles.explorerLink}
-                            title="View on Somnia Explorer"
+                            title="View on Somnia Shannon Explorer"
                           >
-                            <span>Tx: {item.txHash.slice(0, 8)}...</span>
+                            <span>Tx: {item.txHash.slice(0, 6)}...{item.txHash.slice(-4)}</span>
                             <ExternalLink size={11} />
                           </a>
                           <button
@@ -289,14 +263,12 @@ export default function TransferHistory({
                 </div>
 
                 <div className={styles.rightGroup}>
-                  <div className={`${styles.amountText} ${isDeposit ? styles.amountDeposit : styles.amountWithdraw}`}>
-                    {isDeposit ? "+" : "-"}${item.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  <div className={`${styles.amountText} ${isCredit ? styles.amountCredit : styles.amountDebit}`}>
+                    {isCredit ? "+" : "-"}${item.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     <span className={styles.amountToken}> {item.token}</span>
                   </div>
-
-                  <div className={styles.statusBadge}>
-                    <CheckCircle2 size={12} className={styles.statusIcon} />
-                    <span>Completed</span>
+                  <div className={styles.flowSubtext}>
+                    {isCredit ? "Funds Added" : "Funds Removed"}
                   </div>
                 </div>
               </div>

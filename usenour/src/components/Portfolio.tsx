@@ -37,6 +37,7 @@ import { useMarketData } from "../hooks/useMarketData";
 import { formatMarketTitle, resolveMarketIcon, type MarketGroup } from "../types";
 import TradeHistory from "./TradeHistory";
 import TransferHistory from "./TransferHistory";
+import { recordTransfer } from "../services/transferService";
 import WalletActions, { type WalletModalType } from "./WalletActions";
 import RankBadge from "./RankBadge";
 import { useToast, ToastContainer } from "./Toast";
@@ -657,13 +658,27 @@ export default function Portfolio() {
     }
     setRedeemingId(pos.ticker);
     try {
-      await redeemWinningPosition(
+      const tx = await redeemWinningPosition(
         walletProvider,
         pos.poolAddress,
         pos.outcomeTokenId,
         pos.contracts,
         walletAddress || undefined
       );
+      if (walletAddress) {
+        recordTransfer(walletAddress, {
+          type: "deposit",
+          subtype: "payout",
+          amount: pos.contracts,
+          token: "tUSDC",
+          txHash: typeof tx === "string" ? tx : undefined,
+          fromAddress: pos.poolAddress,
+          toAddress: walletAddress,
+          timestamp: new Date().toISOString(),
+          status: "completed",
+          note: `Market Win Payout: ${pos.title || pos.ticker} (${pos.side.toUpperCase()})`,
+        });
+      }
       addToast("success", `Successfully claimed $${pos.contracts.toFixed(2)} tUSDC payout!`);
       await refreshBalance();
       await fetchPortfolio();
@@ -884,7 +899,7 @@ export default function Portfolio() {
           onClick={() => handleTabChange("transfers")}
         >
           <ArrowDownUp size={15} />
-          <span>Transfers</span>
+          <span>Transfers & Activity</span>
         </button>
 
         <button

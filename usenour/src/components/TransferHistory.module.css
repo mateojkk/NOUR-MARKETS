@@ -1,119 +1,17 @@
 .container {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   width: 100%;
 }
 
-/* Stats Summary Bar */
-.statsBar {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 16px 20px;
-  flex-wrap: wrap;
-}
-
-.statItem {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.statLabel {
-  font-size: 11px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-weight: 500;
-}
-
-.statValue {
-  font-family: var(--font-mono);
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text);
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-}
-
-.statUnit {
-  font-size: 11px;
-  color: var(--text-muted);
-  font-weight: 400;
-}
-
-.statValue.positive {
-  color: var(--yes-color);
-}
-
-.statValue.negative {
-  color: #f43f5e;
-}
-
-.statDivider {
-  width: 1px;
-  height: 32px;
-  background: var(--border);
-}
-
-.quickActions {
-  margin-left: auto;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.actionBtnDeposit {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: 8px;
-  border: none;
-  background: var(--primary);
-  color: var(--text-inverse);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.actionBtnDeposit:hover {
-  background: var(--primary-hover);
-  transform: translateY(-1px);
-}
-
-.actionBtnWithdraw {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg-alt);
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.actionBtnWithdraw:hover {
-  background: var(--border);
-  color: var(--primary);
-}
-
-/* Header & Filter Tabs */
+/* Header & Controls */
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .filterTabs {
@@ -148,6 +46,53 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.actionBtnDeposit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: none;
+  background: var(--primary);
+  color: var(--text-inverse);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.actionBtnDeposit:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+}
+
+.actionBtnWithdraw {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.actionBtnWithdraw:hover {
+  background: var(--border);
+  color: var(--primary);
+}
+
 .refreshBtn {
   width: 32px;
   height: 32px;
@@ -167,7 +112,7 @@
   border-color: var(--primary);
 }
 
-/* Transfer Cards List */
+/* Ledger / Transfer Cards List */
 .transferList {
   display: flex;
   flex-direction: column;
@@ -186,7 +131,7 @@
 }
 
 .transferCard:hover {
-  border-color: rgba(94, 174, 139, 0.3);
+  border-color: rgba(94, 174, 139, 0.35);
 }
 
 .leftGroup {
@@ -196,8 +141,8 @@
 }
 
 .iconWrap {
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   border-radius: 10px;
   display: flex;
   align-items: center;
@@ -205,13 +150,13 @@
   flex-shrink: 0;
 }
 
-.iconDeposit {
+.iconCredit {
   background: rgba(94, 174, 139, 0.15);
   color: var(--yes-color);
   border: 1px solid rgba(94, 174, 139, 0.3);
 }
 
-.iconWithdraw {
+.iconDebit {
   background: rgba(244, 63, 94, 0.12);
   color: #f43f5e;
   border: 1px solid rgba(244, 63, 94, 0.25);
@@ -220,7 +165,7 @@
 .infoCol {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .titleRow {
@@ -235,46 +180,54 @@
   color: var(--text);
 }
 
-.typeBadge {
+.flowBadge {
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.4px;
-  padding: 2px 6px;
+  padding: 2px 7px;
   border-radius: 4px;
 }
 
-.badgeDeposit {
-  background: rgba(94, 174, 139, 0.15);
+.badgeCredit {
+  background: rgba(94, 174, 139, 0.18);
   color: var(--yes-color);
-  border: 1px solid rgba(94, 174, 139, 0.3);
+  border: 1px solid rgba(94, 174, 139, 0.35);
 }
 
-.badgeWithdraw {
-  background: rgba(244, 63, 94, 0.12);
+.badgeDebit {
+  background: rgba(244, 63, 94, 0.15);
   color: #f43f5e;
-  border: 1px solid rgba(244, 63, 94, 0.25);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+.subtitleText {
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .metaRow {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-muted);
+  margin-top: 1px;
 }
 
 .bullet {
   color: var(--text-muted);
-  opacity: 0.5;
+  opacity: 0.4;
 }
 
 .dateText {
+  font-family: var(--font-mono);
   color: var(--text-muted);
 }
 
-.networkText {
+.relTimeText {
   color: var(--text-muted);
+  font-weight: 500;
 }
 
 .explorerLink {
@@ -311,24 +264,24 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 4px;
+  gap: 3px;
 }
 
 .amountText {
   font-family: var(--font-mono);
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   display: flex;
   align-items: baseline;
   gap: 2px;
 }
 
-.amountDeposit {
+.amountCredit {
   color: var(--yes-color);
 }
 
-.amountWithdraw {
-  color: var(--text);
+.amountDebit {
+  color: #f43f5e;
 }
 
 .amountToken {
@@ -337,17 +290,10 @@
   font-weight: 400;
 }
 
-.statusBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+.flowSubtext {
   font-size: 11px;
-  color: var(--yes-color);
+  color: var(--text-muted);
   font-weight: 500;
-}
-
-.statusIcon {
-  color: var(--yes-color);
 }
 
 /* Empty State */
@@ -365,9 +311,9 @@
 }
 
 .emptyIconWrap {
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
   background: var(--bg-alt);
   border: 1px solid var(--border);
   color: var(--text-muted);
@@ -378,7 +324,7 @@
 }
 
 .emptyState h4 {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text);
   margin: 0;
@@ -395,7 +341,7 @@
 .emptyActions {
   display: flex;
   gap: 10px;
-  margin-top: 14px;
+  margin-top: 12px;
   flex-wrap: wrap;
   justify-content: center;
 }
@@ -404,12 +350,12 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 18px;
-  border-radius: 10px;
+  padding: 9px 16px;
+  border-radius: 8px;
   border: none;
   background: var(--primary);
   color: var(--text-inverse);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -424,12 +370,12 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 18px;
-  border-radius: 10px;
+  padding: 9px 16px;
+  border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--bg-alt);
   color: var(--text);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -441,21 +387,13 @@
 }
 
 @media (max-width: 640px) {
-  .statsBar {
+  .header {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
   }
-  .statDivider {
-    display: none;
-  }
-  .quickActions {
+  .headerRight {
     margin-left: 0;
-    width: 100%;
-    margin-top: 8px;
-  }
-  .actionBtnDeposit, .actionBtnWithdraw {
-    flex: 1;
-    justify-content: center;
+    justify-content: space-between;
   }
   .transferCard {
     flex-direction: column;

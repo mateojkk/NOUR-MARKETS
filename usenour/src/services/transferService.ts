@@ -20,6 +20,20 @@ export interface TransferRecord {
   note?: string;
 }
 
+export interface LedgerEntry {
+  id: string;
+  flow: "credit" | "debit";
+  category: "deposit" | "withdrawal" | "trade" | "payout" | "refund";
+  title: string;
+  subtitle?: string;
+  amount: number;
+  token: string;
+  timestamp: string;
+  txHash?: string;
+  status: "completed" | "pending" | "failed";
+  note?: string;
+}
+
 function getClient() {
   return getSupabaseClient();
 }
@@ -99,7 +113,7 @@ export async function getTransfers(walletAddress: string): Promise<TransferRecor
  */
 export async function recordTransfer(
   walletAddress: string,
-  transfer: Omit<TransferRecord, "id">
+  transfer: Omit<TransferRecord, "id" | "timestamp"> & { timestamp?: string }
 ): Promise<TransferRecord> {
   const safeAddress = normalizeAddress(walletAddress);
   const client = getClient();
@@ -187,4 +201,112 @@ export async function seedInitialDepositIfEmpty(
       note: "Somnia Shannon Testnet Faucet",
     });
   }
+}
+
+/**
+ * Fetch unified ledger activity (Credits and Debits: deposits, withdrawals, market payouts, refunds, and trades)
+ */
+export async function getLedgerHistory(walletAddress: string): Promise<LedgerEntry[]> {
+  if (!walletAddress) return [];
+  const safeAddress = normalizeAddress(walletAddress);
+  const client = getClient();
+  const entries: LedgerEntry[] = [];
+
+  // 1. Fetch transfers (Deposits, Withdrawals, Payouts, Refunds)
+  try {
+    const rawTransfers = await getTransfers(safeAddress);
+    for (const t of rawTransfers) {
+      const isDeposit = t.type === "deposit";
+      let flow: "credit" | "debit" = isDeposit ? "credit" : "debit";
+      let category: LedgerEntry["category"] = "deposit";
+      let title = "Deposit";
+      let subtitle = t.note;
+
+      if (isDeposit) {
+        flow = "credit";
+        if (t.subtype === "faucet") {
+          category = "deposit";
+          title = "Testnet Faucet Funding";
+          subtitle = subtitle || "Somnia Shannon Collateral";
+        } else if (t.subtype === "payout") {
+          category = "payout";
+          title = "Market Win Payout";
+          subtitle = subtitle || "Redeemed winning position";
+        } else if (t.subtype === "refund") {
+          category = "refund";
+          title = "Market Collateral Refund";
+          subtitle = subtitle || "Expired window order refund";
+        } else {
+          category = "deposit";
+          title = "Collateral Deposit";
+          subtitle = subtitle || (t.fromAddress ? `From: ${t.fromAddress.slice(0, 6)}...${t.fromAddress.slice(-4)}` : undefined);
+        }
+      } else {
+        flow = "debit";
+        category = "withdrawal";
+        title = "Withdrawal";
+        subtitle = subtitle || (t.toAddress ? `To: ${t.toAddress.slice(0, 6)}...${t.toAddress.slice(-4)}` : "Sent from wallet");
+      }
+
+      entries.push({
+        id: `transfer-${t.id}`,
+        flow,
+        category,
+        title,
+        subtitle,
+        amount: Number(t.amount || 0),
+        token: t.token || "tUSDC",
+        timestamp: t.timestamp,
+        txHash: t.txHash,
+        status: t.status,
+        note: t.note,
+      });
+    }
+  } catch (err) {
+    console.error("Failed to load transfers for ledger:", err);
+  }
+
+  // 2. Fetch trade debits and credits from Supabase database
+  try {
+    const { data: trades, error } = await client
+      .from("trades")
+      .select("*")
+      .eq("wallet_address", safeAddress)
+      .order("created_at", { ascending: false });
+
+    if (!error && Array.isArray(trades)) {
+      for (const tr of trades) {
+        const isBuy = tr.action === "buy";
+        const flow: "credit" | "debit" = isBuy ? "debit" : "credit";
+        const amount = Number(tr.total_cost || 0);
+
+        entries.push({
+          id: `trade-${tr.id || tr.created_at}`,
+          flow,
+          category: "trade",
+          title: isBuy
+            ? `Trade: Buy ${tr.side?.toUpperCase()} · ${tr.ticker}`
+            : `Trade: Sell ${tr.side?.toUpperCase()} · ${tr.ticker}`,
+          subtitle: tr.title || "Prediction Market Order",
+          amount: amount > 0 ? amount : Number(tr.amount || 0),
+          token: "tUSDC",
+          timestamp: tr.created_at,
+          txHash: tr.tx_signature,
+          status: "completed",
+          note: `${tr.action === "buy" ? "Debited" : "Credited"} for ${tr.amount} contracts @ ${tr.price}¢`,
+        });
+      }
+    }
+  } catch (err) {
+    console.error("Failed to load trades for ledger:", err);
+  }
+
+  // 3. Sort chronologically (most recent first)
+  entries.sort((a, b) => {
+    const timeA = new Date(a.timestamp).getTime() || 0;
+    const timeB = new Date(b.timestamp).getTime() || 0;
+    return timeB - timeA;
+  });
+
+  return entries;
 }
