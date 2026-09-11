@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
-import { ArrowLeft, TrendingUp } from "lucide-react";
+import { ArrowLeft, TrendingUp, Zap, SlidersHorizontal, Info } from "lucide-react";
 import { useEvmWallet } from "../contexts/EvmWalletContext";
 import type { Market, MarketGroup } from "../types";
 import { getSubtitle, formatMarketTitle, resolveMarketIcon } from "../types";
 import { recordTrade, getPositions, type PositionRecord } from "../services/userService";
-import { placeDreamDexOrder, DREAMDEX_CONTRACTS } from "../services/dreamdex";
+import { placeDreamDexOrder, getPoolBookTops, DREAMDEX_CONTRACTS, type PoolBookTops } from "../services/dreamdex";
 import PriceChart from "./PriceChart";
 import styles from "./TradePage.module.css";
 
@@ -110,8 +110,64 @@ const TradePage: React.FC<TradePageProps> = ({
     return group.markets.find((m) => m.ticker === selectedMarket.ticker) || selectedMarket;
   }, [group.markets, selectedMarket]);
 
-  // Derive active price based on outcome side
-  const price = orderSide === "yes" ? activeMarket.price_yes : activeMarket.price_no;
+  // Order mode state: "market" (instant taker fill) or "limit" (custom maker price)
+  const [orderMode, setOrderMode] = useState<"market" | "limit">("market");
+  const [customLimitPrice, setCustomLimitPrice] = useState<number | null>(null);
+  const [bookTops, setBookTops] = useState<PoolBookTops | null>(null);
+
+  // Poll live top of book directly from Somnia pool contract every 3.5s
+  useEffect(() => {
+    const pool = activeMarket.poolAddress || selectedMarket.poolAddress;
+    if (!pool || pool.toLowerCase() === DREAMDEX_CONTRACTS.binaryMarketsModule.toLowerCase()) return;
+    let mounted = true;
+    const fetchTops = async () => {
+      try {
+        const tops = await getPoolBookTops(pool);
+        if (mounted) setBookTops(tops);
+      } catch {}
+    };
+    fetchTops();
+    const interval = setInterval(fetchTops, 3500);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, [activeMarket.poolAddress, selectedMarket.poolAddress]);
+
+  // Derive live executable prices from top of book
+  const liveBestAskYes = bookTops?.bestAskYes !== null && bookTops?.bestAskYes !== undefined
+    ? Math.round(bookTops.bestAskYes * 1000) / 10
+    : null;
+  const liveBestBidYes = bookTops?.bestBidYes !== null && bookTops?.bestBidYes !== undefined
+    ? Math.round(bookTops.bestBidYes * 1000) / 10
+    : null;
+  const liveBestAskNo = bookTops?.bestAskNo !== null && bookTops?.bestAskNo !== undefined
+    ? Math.round(bookTops.bestAskNo * 1000) / 10
+    : null;
+  const liveBestBidNo = bookTops?.bestBidNo !== null && bookTops?.bestBidNo !== undefined
+    ? Math.round(bookTops.bestBidNo * 1000) / 10
+    : null;
+
+  // Real-time executable market price (Taker)
+  const executableMarketPrice = useMemo(() => {
+    if (tradeAction === "buy") {
+      if (orderSide === "yes") {
+        return liveBestAskYes ?? activeMarket.price_yes;
+      } else {
+        return liveBestAskNo ?? activeMarket.price_no;
+      }
+    } else {
+      // Sell takes the highest bid
+      if (orderSide === "yes") {
+        return liveBestBidYes ?? activeMarket.price_yes;
+      } else {
+        return liveBestBidNo ?? activeMarket.price_no;
+      }
+    }
+  }, [tradeAction, orderSide, liveBestAskYes, liveBestBidYes, liveBestAskNo, liveBestBidNo, activeMarket.price_yes, activeMarket.price_no]);
+
+  // Active price used for execution & calculation
+  const price = orderMode === "limit" && customLimitPrice !== null ? customLimitPrice : executableMarketPrice;
   
   // Calculate cost and shares
   const cost = inputType === "usd" 
@@ -165,7 +221,7 @@ const TradePage: React.FC<TradePageProps> = ({
         action: tradeAction,
         priceProb: price / 100,
         contractsAmount: shares,
-        orderType: "limit",
+        orderType: orderMode === "market" ? "market" : "limit",
       });
 
       // Record trade locally
@@ -187,19 +243,29 @@ const TradePage: React.FC<TradePageProps> = ({
           platform_fee: 0,
           pnl: estPnl,
         }).catch(() => {});
-
-        await fetchPositions();
       }
 
       await refreshBalance();
-      setOrderStatus(null);
-      onOrderComplete?.(
-        true,
-        tradeAction === "sell"
-          ? `Closed ${shares} ${orderSide.toUpperCase()} on Somnia Shannon! Payout: $${netSellProceeds.toFixed(2)} tUSDC (Tx: ${result.txHash.slice(0, 10)}...)`
-          : `Executed on Somnia Shannon! BUY ${shares} ${orderSide.toUpperCase()} at ${price}¢ (Tx: ${result.txHash.slice(0, 10)}...)`
-      );
+      await fetchPositions();
+
+      if (result.isFilled) {
+        onOrderComplete?.(
+          true,
+          `⚡ Order filled immediately on Somnia Shannon! ${shares.toLocaleString()} contracts @ ${price.toFixed(1)}¢`
+        );
+      } else if (result.isRested) {
+        onOrderComplete?.(
+          true,
+          `Order placed as resting limit order on the book @ ${price.toFixed(1)}¢`
+        );
+      } else {
+        onOrderComplete?.(
+          true,
+          `${tradeAction === "buy" ? "Bought" : "Sold"} ${shares.toLocaleString()} ${orderSide.toUpperCase()} contracts successfully!`
+        );
+      }
       setOrderAmount("");
+      setOrderStatus(null);
     } catch (error: any) {
       console.error("DreamDEX trade error:", error);
       setOrderStatus(null);
@@ -429,21 +495,115 @@ const TradePage: React.FC<TradePageProps> = ({
           </button>
         </div>
 
+        {/* Order Mode Toggle (Market vs Limit) */}
+        <div className={styles.orderModeToggle}>
+          <button
+            type="button"
+            className={`${styles.modeBtn} ${orderMode === "market" ? styles.modeBtnActive : ""}`}
+            onClick={() => {
+              setOrderMode("market");
+              setCustomLimitPrice(null);
+            }}
+          >
+            <Zap size={13} className={styles.modeZapIcon} />
+            Market (Instant Fill)
+          </button>
+          <button
+            type="button"
+            className={`${styles.modeBtn} ${orderMode === "limit" ? styles.modeBtnActive : ""}`}
+            onClick={() => {
+              setOrderMode("limit");
+              if (customLimitPrice === null) {
+                setCustomLimitPrice(executableMarketPrice);
+              }
+            }}
+          >
+            <SlidersHorizontal size={13} />
+            Limit
+          </button>
+        </div>
+
         {/* Yes (Up) / No (Down) Buttons */}
         <div className={styles.sideBtns}>
           <button
             className={`${styles.sideBtn} ${styles.yes} ${orderSide === "yes" ? styles.active : ""}`}
             onClick={() => setOrderSide("yes")}
           >
-            Up (Yes) {activeMarket.price_yes}¢
+            Up (Yes) {orderMode === "market" && tradeAction === "buy" && liveBestAskYes ? `${liveBestAskYes}¢` : `${activeMarket.price_yes}¢`}
           </button>
           <button
             className={`${styles.sideBtn} ${styles.no} ${orderSide === "no" ? styles.active : ""}`}
             onClick={() => setOrderSide("no")}
           >
-            Down (No) {activeMarket.price_no}¢
+            Down (No) {orderMode === "market" && tradeAction === "buy" && liveBestAskNo ? `${liveBestAskNo}¢` : `${activeMarket.price_no}¢`}
           </button>
         </div>
+
+        {/* Live Execution / Limit Selector */}
+        {orderMode === "market" ? (
+          <div className={styles.instantExecutionBanner}>
+            <div className={styles.instantHeader}>
+              <span className={styles.instantBadge}>
+                <Zap size={11} className={styles.zapIcon} />
+                Instant Fill @ {executableMarketPrice.toFixed(1)}¢
+              </span>
+              <span className={styles.poolLiquidityIndicator}>
+                Live Book
+              </span>
+            </div>
+            <div className={styles.instantDesc}>
+              {tradeAction === "buy"
+                ? `Matches resting asks on Somnia Shannon testnet immediately.`
+                : `Matches resting bids on Somnia Shannon testnet immediately.`}
+            </div>
+          </div>
+        ) : (
+          <div className={styles.limitPriceRow}>
+            <div className={styles.limitPriceHeader}>
+              <span className={styles.limitLabel}>Limit Price</span>
+              <span className={styles.orderbookSpread}>
+                Orderbook: {liveBestBidYes !== null ? `${liveBestBidYes}¢` : "—"} / {liveBestAskYes !== null ? `${liveBestAskYes}¢` : "—"}
+              </span>
+            </div>
+            <div className={styles.limitInputContainer}>
+              <button
+                type="button"
+                className={styles.limitStepBtn}
+                onClick={() => setCustomLimitPrice((prev) => Math.max(1, Math.round(((prev ?? executableMarketPrice) - 1) * 10) / 10))}
+              >
+                -
+              </button>
+              <div className={styles.limitInputWrapper}>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="1"
+                  max="99"
+                  value={price}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value);
+                    if (!isNaN(v)) setCustomLimitPrice(Math.max(1, Math.min(99, Math.round(v * 10) / 10)));
+                  }}
+                  className={styles.limitInput}
+                />
+                <span className={styles.centSuffix}>¢</span>
+              </div>
+              <button
+                type="button"
+                className={styles.limitStepBtn}
+                onClick={() => setCustomLimitPrice((prev) => Math.min(99, Math.round(((prev ?? executableMarketPrice) + 1) * 10) / 10))}
+              >
+                +
+              </button>
+            </div>
+            {tradeAction === "buy" && (orderSide === "yes" ? liveBestAskYes : liveBestAskNo) && price < (orderSide === "yes" ? liveBestAskYes! : liveBestAskNo!) && (
+              <div className={styles.restingWarning}>
+                <Info size={12} />
+                Price is below best ask ({(orderSide === "yes" ? liveBestAskYes : liveBestAskNo)}¢). Will rest on the orderbook.
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Amount Input */}
         <div className={styles.amountSection}>

@@ -871,3 +871,182 @@
 .sellBtn:hover:not(:disabled) {
   background: #dc2626 !important;
 }
+
+/* Order Mode Toggle (Market vs Limit) */
+.orderModeToggle {
+  display: flex;
+  background: var(--bg-alt);
+  padding: 3px;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  gap: 4px;
+}
+
+.modeBtn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.modeBtnActive {
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  font-weight: 600;
+}
+
+.modeZapIcon {
+  color: #10b981;
+}
+
+/* Instant Execution Banner */
+.instantExecutionBanner {
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+}
+
+.instantHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.instantBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #10b981;
+}
+
+.zapIcon {
+  color: #10b981;
+}
+
+.poolLiquidityIndicator {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  background: rgba(16, 185, 129, 0.18);
+  color: #10b981;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.instantDesc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* Limit Price Stepper & Inputs */
+.limitPriceRow {
+  background: var(--bg-alt);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+}
+
+.limitPriceHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.limitLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.orderbookSpread {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.limitInputContainer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.limitStepBtn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.limitStepBtn:hover {
+  background: var(--bg-hover);
+  border-color: var(--text-muted);
+}
+
+.limitInputWrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 10px;
+}
+
+.limitInput {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--text);
+  padding: 6px 0;
+  outline: none;
+}
+
+.centSuffix {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.restingWarning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #f59e0b;
+  line-height: 1.3;
+}
+

@@ -84,6 +84,57 @@ export function getExpiryNanoseconds(secondsFromNow = 300): bigint {
   return futureSeconds * 1_000_000_000n;
 }
 
+export interface PoolBookTops {
+  bestBidYes: number | null; // 0..1 (e.g. 0.931)
+  bestAskYes: number | null; // 0..1 (e.g. 0.952)
+  bestBidNo: number | null;  // 0..1 (e.g. 0.048 = 1 - 0.952)
+  bestAskNo: number | null;  // 0..1 (e.g. 0.069 = 1 - 0.931)
+}
+
+/**
+ * Query real-time top of book levels (Best Bid & Best Ask) directly from the Somnia Shannon pool contract.
+ */
+export async function getPoolBookTops(poolAddress: string): Promise<PoolBookTops> {
+  try {
+    const { ethers } = await import("ethers");
+    const provider = new ethers.JsonRpcProvider(SOMNIA_RPC_URL);
+    const safePoolAddress = ethers.getAddress(poolAddress.toLowerCase());
+    const abi = [
+      "function getBookLevels(bool isBid, uint64 numLevels) view returns (tuple(uint256 price, uint256 quantity)[])"
+    ];
+    const contract = new ethers.Contract(safePoolAddress, abi, provider);
+    const [bids, asks] = await Promise.all([
+      contract.getBookLevels(true, 1n),
+      contract.getBookLevels(false, 1n),
+    ]);
+
+    const bestBidYes = bids.length > 0 ? Number(bids[0].price) / 1e6 : null;
+    const bestAskYes = asks.length > 0 ? Number(asks[0].price) / 1e6 : null;
+
+    // Mathematical equivalence on the unified binary orderbook:
+    // P(NO) = 1 - P(YES)
+    // To BUY NO, you take someone's bid on YES: price is 1 - bestBidYes
+    // To SELL NO, you take someone's ask on YES: price is 1 - bestAskYes
+    const bestAskNo = bestBidYes !== null ? Number((1 - bestBidYes).toFixed(4)) : null;
+    const bestBidNo = bestAskYes !== null ? Number((1 - bestAskYes).toFixed(4)) : null;
+
+    return {
+      bestBidYes,
+      bestAskYes,
+      bestBidNo,
+      bestAskNo,
+    };
+  } catch (err) {
+    console.error("Failed to query pool book levels:", err);
+    return {
+      bestBidYes: null,
+      bestAskYes: null,
+      bestBidNo: null,
+      bestAskNo: null,
+    };
+  }
+}
+
 
 // Group markets into series (e.g. Bitcoin Event Contracts & Ethereum Event Contracts)
 export function groupEventContracts(markets: Market[]): MarketGroup[] {
@@ -217,7 +268,14 @@ export interface PlaceOrderParams {
   action?: "buy" | "sell"; // BUY = kind 0/2, SELL = kind 1/3
   priceProb: number; // 0..1 (e.g. 0.54)
   contractsAmount: number;
-  orderType?: "ioc" | "post_only" | "limit";
+  orderType?: "ioc" | "post_only" | "limit" | "market";
+}
+
+export interface PlaceOrderResult {
+  txHash: string;
+  orderId: string;
+  isRested?: boolean;
+  isFilled?: boolean;
 }
 
 export async function placeDreamDexOrder({
@@ -228,7 +286,7 @@ export async function placeDreamDexOrder({
   priceProb,
   contractsAmount,
   orderType = "limit",
-}: PlaceOrderParams): Promise<{ txHash: string; orderId: string }> {
+}: PlaceOrderParams): Promise<PlaceOrderResult> {
   const { ethers } = await import("ethers");
   const safePoolAddress = ethers.getAddress(poolAddress.toLowerCase());
 
@@ -252,7 +310,18 @@ export async function placeDreamDexOrder({
   // 1. Calculate prices and costs
   // The Somnia BinaryPool contract ALWAYS expects the YES-side probability / limit price
   // regardless of whether buying or selling YES or NO (per Somnia SDK tradeAbi.js).
-  const clampedProb = Math.max(0.01, Math.min(0.99, priceProb));
+  const isMarket = orderType === "market";
+  // If market order: apply a small slippage buffer to ensure the taker order crosses the best ask/bid immediately
+  let effectiveProb = priceProb;
+  if (isMarket) {
+    if (action === "buy") {
+      effectiveProb = Math.min(0.99, priceProb + 0.015);
+    } else {
+      effectiveProb = Math.max(0.01, priceProb - 0.015);
+    }
+  }
+
+  const clampedProb = Math.max(0.01, Math.min(0.99, effectiveProb));
   const yesPriceProb = side === "yes" ? clampedProb : Math.max(0.01, Math.min(0.99, 1 - clampedProb));
   const outcomePrice = side === "yes" ? yesPriceProb : 1 - yesPriceProb;
 
@@ -431,9 +500,10 @@ export async function placeDreamDexOrder({
       { gasLimit }
     );
     const receipt = await tx.wait();
-    let extractedOrderId = `order-${receipt.hash}`;
     const BINARY_ORDER_PLACED = "0x74d63d9f1c4826854a227aa41c4a51723497a608aa14aa50e8153744f081d4e6";
     const ORDER_RESTED = "0xd90f62f61ee2f606b132cfdfd883ddd079228b6fd6bffd9d7cf848daf824639d";
+    const hasRested = receipt.logs.some((l: any) => l.topics[0] === ORDER_RESTED);
+    let extractedOrderId = receipt.hash;
     const log = receipt.logs.find((l: any) => l.topics[0] === BINARY_ORDER_PLACED || l.topics[0] === ORDER_RESTED);
     if (log && log.topics[1]) {
       extractedOrderId = BigInt(log.topics[1]).toString();
@@ -441,6 +511,8 @@ export async function placeDreamDexOrder({
     return {
       txHash: receipt.hash,
       orderId: extractedOrderId,
+      isRested: hasRested,
+      isFilled: !hasRested,
     };
   } catch (err: any) {
     if (err?.code === "ACTION_REJECTED" || err?.message?.includes("user rejected") || err?.message?.includes("User rejected")) {
