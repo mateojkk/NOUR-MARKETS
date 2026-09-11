@@ -8,7 +8,7 @@ const Footer: React.FC = () => {
         <div className="footer-brand">
           <img src={nourLogo} alt="nour" className="footer-logo" />
           <p className="footer-tagline">
-            A simplified prediction markets platform for crypto and culture markets.
+            Binary prediction markets on Somnia — powered by DreamDEX on-chain event contracts.
           </p>
         </div>
         

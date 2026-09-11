@@ -178,9 +178,9 @@
   letter-spacing: 0.5px;
 }
 
-.chain-badge.polygon {
-  background: rgba(130, 71, 229, 0.15);
-  color: #8247e5;
+.chain-badge.somnia {
+  background: rgba(175, 217, 198, 0.12);
+  color: var(--primary);
   border: none;
 }
 

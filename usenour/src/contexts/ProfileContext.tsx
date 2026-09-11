@@ -8,7 +8,6 @@ interface UserProfile {
   username: string;
   bio: string;
   avatarUrl: string;
-  isBetaUser: boolean;
 }
 
 interface ProfileContextType {
@@ -28,7 +27,6 @@ const defaultProfile: UserProfile = {
   username: "",
   bio: "",
   avatarUrl: "",
-  isBetaUser: true,
 };
 
 const ProfileContext = createContext<ProfileContextType | null>(null);
@@ -77,7 +75,6 @@ export const ProfileProvider: React.FC<ProfileProviderProps> = ({ children }) =>
             username: data.username || "",
             bio: data.bio || "",
             avatarUrl: data.avatar_url || "",
-            isBetaUser: true,
           };
           setProfileState(updated);
           return;
@@ -99,7 +96,6 @@ export const ProfileProvider: React.FC<ProfileProviderProps> = ({ children }) =>
             username: data.username || "",
             bio: data.bio || "",
             avatarUrl: data.avatar_url || "",
-            isBetaUser: true,
           });
         }
       } catch {}

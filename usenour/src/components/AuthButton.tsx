@@ -1,9 +1,8 @@
 /**
  * Auth Button Component
  *
- * Shows a compact profile button when connected.
- * In the new Magic-only flow, login is handled via BetaGate,
- * so this button primarily serves as a profile/disconnect trigger.
+ * Shows a compact profile/disconnect button when connected.
+ * Login is handled by LoginPage (email OTP via Magic SDK or injected wallet).
  */
 import { useEvmWallet } from '../contexts/EvmWalletContext';
 import { User, Wallet } from 'lucide-react';
