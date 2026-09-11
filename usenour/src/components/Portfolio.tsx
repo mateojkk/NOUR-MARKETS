@@ -1022,6 +1022,10 @@ export default function Portfolio() {
                 const isWon = position.settlementStatus === "won";
                 const isLost = position.settlementStatus === "lost";
                 const isRefunded = position.settlementStatus === "refunded";
+                const totalCost = (position.contracts * position.avgPrice) / 100;
+                const finalPayout = isWon ? (position.contracts * 100) / 100 : isRefunded ? totalCost : 0;
+                const marketOutcome = position.resolvedOutcome || (isWon ? (position.side === "yes" ? "UP" : "DOWN") : (position.side === "yes" ? "DOWN" : "UP"));
+
                 return (
                   <div key={idx} className="position-card">
                     <div className="position-header">
@@ -1036,33 +1040,67 @@ export default function Portfolio() {
                         />
                         <div>
                           <div className="position-title">{formatMarketTitle(position.title)}</div>
-                          <span className="position-ticker">{position.ticker}</span>
+                          <div style={{ display: "flex", alignItems: "center", marginTop: "3px" }}>
+                            <span className="window-ended-tag">Ended Window</span>
+                            <span className="position-ticker">{position.ticker}</span>
+                          </div>
                         </div>
                       </div>
 
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <span className={`position-side-badge ${position.side}`}>
                           {position.side === "yes" ? "UP (YES)" : "DOWN (NO)"}
                         </span>
-                        {isWon && <span className="settled-outcome-pill won">WON</span>}
-                        {isLost && <span className="settled-outcome-pill lost">LOST</span>}
-                        {isRefunded && <span className="settled-outcome-pill refunded">REFUNDED</span>}
-                        {!isWon && !isLost && !isRefunded && <span className="settled-outcome-pill pending">PENDING</span>}
+                        {isWon && <span className="settled-outcome-pill won">🏆 WON</span>}
+                        {isLost && <span className="settled-outcome-pill lost">❌ LOST</span>}
+                        {isRefunded && <span className="settled-outcome-pill refunded">↩ REFUNDED</span>}
+                        {!isWon && !isLost && !isRefunded && <span className="settled-outcome-pill pending">⏳ SETTLING</span>}
                       </div>
+                    </div>
+
+                    {/* What Happened / Resolution Explanation Banner */}
+                    <div className={`settled-story-card ${isWon ? "won" : isLost ? "lost" : isRefunded ? "refunded" : "pending"}`}>
+                      <div className="story-header">
+                        <span className="story-result-title">
+                          {isWon && `✅ Won! Market Settled ${marketOutcome}`}
+                          {isLost && `❌ Market Settled ${marketOutcome} (Lost)`}
+                          {isRefunded && `↩ Order Expired Unfilled (Refunded)`}
+                          {!isWon && !isLost && !isRefunded && `⏳ Market Closed · Resolving`}
+                        </span>
+                        <span className="story-tag">
+                          {isWon ? "Settled @ 100.0¢" : isLost ? "Settled @ 0.0¢" : isRefunded ? "100% Refunded" : "Awaiting Oracle"}
+                        </span>
+                      </div>
+                      <p className="story-description">
+                        {isWon && (
+                          `You predicted ${position.side === "yes" ? "UP" : "DOWN"}. Because the price moved in your favor, each of your ${position.contracts.toLocaleString()} contracts resolved to 100.0¢ ($1.00 tUSDC).`
+                        )}
+                        {isLost && (
+                          `You predicted ${position.side === "yes" ? "UP" : "DOWN"}. Because this window finished ${marketOutcome}, contracts expired out-of-the-money at 0.0¢ with $0.00 payout.`
+                        )}
+                        {isRefunded && (
+                          `Your limit order did not match with a counterparty before this window closed. Your $${totalCost.toFixed(2)} tUSDC collateral was returned 100% to your wallet.`
+                        )}
+                        {!isWon && !isLost && !isRefunded && (
+                          `Trading has closed for this window. The Somnia oracle is publishing the final price to determine winners.`
+                        )}
+                      </p>
                     </div>
 
                     <div className="position-metrics-grid">
                       <div className="metric-box">
-                        <span className="m-label">Contracts / Shares</span>
-                        <span className="m-val">{position.contracts.toLocaleString()}</span>
+                        <span className="m-label">Your Prediction</span>
+                        <span className="m-val">{position.contracts.toLocaleString()} {position.side.toUpperCase()} @ {position.avgPrice.toFixed(1)}¢</span>
                       </div>
                       <div className="metric-box">
-                        <span className="m-label">Avg Entry Price</span>
-                        <span className="m-val">{position.avgPrice.toFixed(1)}¢</span>
+                        <span className="m-label">Initial Cost</span>
+                        <span className="m-val">${totalCost.toFixed(2)} tUSDC</span>
                       </div>
                       <div className="metric-box">
-                        <span className="m-label">Settlement Price</span>
-                        <span className="m-val">{isWon ? "100.0¢" : isLost ? "0.0¢" : isRefunded ? `${position.avgPrice.toFixed(1)}¢ (Refunded)` : `${position.currentPrice.toFixed(1)}¢`}</span>
+                        <span className="m-label">Final Payout</span>
+                        <span className="m-val" style={{ fontWeight: 700, color: isWon ? "#22c55e" : isLost ? "#ef4444" : "var(--text)" }}>
+                          {isWon ? `$${finalPayout.toFixed(2)} tUSDC` : isRefunded ? `$${finalPayout.toFixed(2)} (Refunded)` : "$0.00"}
+                        </span>
                       </div>
                       <div className="metric-box">
                         <span className="m-label">Realized P&L</span>
@@ -1073,28 +1111,23 @@ export default function Portfolio() {
                     </div>
 
                     <div className="position-footer-actions">
-                      {isWon ? (
+                      {isWon && (
                         <button
                           className="position-action-btn redeem"
                           onClick={() => handleRedeem(position)}
                           disabled={redeemingId === position.ticker}
                         >
                           <Trophy size={14} />
-                          <span>{redeemingId === position.ticker ? "Redeeming..." : `Claim Payout ($${((position.contracts * 100) / 100).toFixed(2)} tUSDC)`}</span>
+                          <span>{redeemingId === position.ticker ? "Redeeming..." : `Claim Payout ($${finalPayout.toFixed(2)} tUSDC)`}</span>
                         </button>
-                      ) : isRefunded ? (
-                        <div className="settled-status-badge refunded">
-                          <span>Unfilled Order Expired · 100% Collateral Returned to Wallet</span>
-                        </div>
-                      ) : isLost ? (
-                        <div className="settled-status-badge lost">
-                          <span>{position.resolvedOutcome ? `Resolved ${position.resolvedOutcome} · Position Lost ($0.00)` : "Position Lost ($0.00)"}</span>
-                        </div>
-                      ) : (
-                        <div className="settled-status-badge pending">
-                          <span>Awaiting Settlement</span>
-                        </div>
                       )}
+                      <button
+                        className="trade-next-btn"
+                        onClick={() => handleTradeMore(position)}
+                      >
+                        <span>Trade Active Window</span>
+                        <ArrowUpRight size={14} />
+                      </button>
                     </div>
                   </div>
                 );
