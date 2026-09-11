@@ -96,7 +96,8 @@ export default function WalletActions({ walletAddress, usdcBalance, onTransactio
         signer
       );
 
-      const parsedAmount = parseUnits(amount, DREAMDEX_CONTRACTS.collateralDecimals);
+      const sanitizedAmount = Number(amount).toFixed(DREAMDEX_CONTRACTS.collateralDecimals);
+      const parsedAmount = parseUnits(sanitizedAmount, DREAMDEX_CONTRACTS.collateralDecimals);
       const tx = await contract.transfer(recipient, parsedAmount);
       setTxHash(tx.hash);
       await tx.wait();

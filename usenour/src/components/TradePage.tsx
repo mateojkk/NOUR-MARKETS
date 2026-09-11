@@ -175,8 +175,8 @@ const TradePage: React.FC<TradePageProps> = ({
           : undefined;
 
         await recordTrade(evmAddress, {
-          ticker: selectedMarket.ticker,
-          title: group.title,
+          ticker: activeMarket.ticker || selectedMarket.ticker,
+          title: activeMarket.title || selectedMarket.title || group.title,
           side: orderSide,
           action: tradeAction,
           amount: shares,

@@ -60,7 +60,7 @@ async function fetchBatchSettledMarkets(ids: string[]): Promise<Map<string, Sett
 
   try {
     const query = `query {
-      Market(where: { id: { _in: ${JSON.stringify(cleanIds)} } }) {
+      Market(where: { _or: [{ id: { _in: ${JSON.stringify(cleanIds)} } }, { marketId: { _in: ${JSON.stringify(cleanIds)} } }] }) {
         id
         marketId
         poolAddress
@@ -93,14 +93,17 @@ async function fetchBatchSettledMarkets(ids: string[]): Promise<Map<string, Sett
 
     for (const m of marketsList) {
       const idKey = String(m.id).toLowerCase();
-      const winningOutcome = resMap.get(idKey);
-      result.set(idKey, {
+      const mKey = m.marketId ? String(m.marketId).toLowerCase() : "";
+      const winningOutcome = resMap.get(idKey) ?? (mKey ? resMap.get(mKey) : undefined);
+      const entry: SettledOnchainData = {
         marketId: m.marketId || m.id,
         poolAddress: m.poolAddress,
         clobStatus: m.clobStatus,
         isResolved: winningOutcome !== undefined,
         winningOutcome: winningOutcome as 0 | 1 | undefined,
-      });
+      };
+      result.set(idKey, entry);
+      if (mKey) result.set(mKey, entry);
     }
   } catch (err) {
     console.error("Failed to query on-chain settled market info:", err);
@@ -249,10 +252,14 @@ export default function Portfolio() {
             settlementStatus = "pending";
             currentPrice = avgPrice;
           }
-        } else {
+        } else if (markets.length > 0) {
           isSettled = true;
           currentPrice = 0;
           settlementStatus = "lost";
+        } else {
+          // Markets feed is still initializing — do not assume settled/lost prematurely
+          isSettled = false;
+          currentPrice = avgPrice;
         }
 
         const resolvedOutcome: "UP" | "DOWN" | undefined = onchainSettled?.winningOutcome === 0

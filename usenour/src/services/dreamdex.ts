@@ -477,7 +477,7 @@ export async function mintCompleteSets(walletProvider: any, poolAddress: string,
     signer
   );
 
-  const rawAmount = parseUnits(amount.toString(), DREAMDEX_CONTRACTS.collateralDecimals);
+  const rawAmount = parseUnits(Number(amount).toFixed(DREAMDEX_CONTRACTS.collateralDecimals), DREAMDEX_CONTRACTS.collateralDecimals);
   const tx = await moduleContract.mintCompleteSets(safePoolAddress, rawAmount);
   const receipt = await tx.wait();
   return receipt.hash;
@@ -502,7 +502,7 @@ export async function redeemWinningPosition(
     signer
   );
 
-  const rawAmount = parseUnits(amount.toString(), DREAMDEX_CONTRACTS.collateralDecimals);
+  const rawAmount = parseUnits(Number(amount).toFixed(DREAMDEX_CONTRACTS.collateralDecimals), DREAMDEX_CONTRACTS.collateralDecimals);
   const tx = await settlementContract.redeem(marketId, safePoolAddress, outcomeIdx, rawAmount);
   const receipt = await tx.wait();
   return receipt.hash;
